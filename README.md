@@ -1,6 +1,6 @@
-# GenPass - Trình Tạo Mật Khẩu Chuẩn Bitwarden & Xác Thực 2FA (TOTP)
+# GenPass - Trình Tạo Mật Khẩu & Xác Thực 2FA (TOTP)
 
-GenPass là tiện ích mở rộng trình duyệt (Chrome Extension Manifest V3) mã nguồn mở, hoạt động ngoại tuyến 100%. Tiện ích kết hợp giữa trình tạo mật khẩu chuẩn Bitwarden (hỗ trợ cả mật khẩu ký tự ngẫu nhiên và cụm từ Passphrase Diceware), trình xác thực hai lớp 2FA/TOTP chuẩn RFC 6238, ghi chú bảo mật (Secure Notes) và hệ thống menu chuột phải tiện lợi.
+GenPass là tiện ích mở rộng trình duyệt (Chrome Extension Manifest V3) mã nguồn mở, hoạt động ngoại tuyến 100%. Tiện ích kết hợp giữa trình tạo mật khẩu theo chuẩn ngành (hỗ trợ cả mật khẩu ký tự ngẫu nhiên và cụm từ Passphrase Diceware), trình xác thực hai lớp 2FA/TOTP chuẩn RFC 6238, ghi chú bảo mật (Secure Notes) và hệ thống menu chuột phải tiện lợi.
 
 Toàn bộ dữ liệu được lưu trữ cục bộ trên máy của bạn qua `chrome.storage.local`, không gửi ra bất kỳ máy chủ bên thứ ba nào.
 
@@ -12,7 +12,7 @@ Toàn bộ dữ liệu được lưu trữ cục bộ trên máy của bạn qua
 | :--- | :--- |
 | **Mật khẩu ngẫu nhiên** | Độ dài 5 - 64 ký tự, Chữ hoa, Chữ thường, Số, Ký tự đặc biệt, lọc ký tự dễ nhầm (`l`, `1`, `I`, `0`, `O`...). |
 | **Cụm từ Passphrase** | Chuẩn Diceware EFF 1,296 từ dễ nhớ, tùy chọn 3 - 10 từ, ký tự phân cách (`-`, `_`, `.`, khoảng trắng), viết hoa chữ đầu, kèm số ngẫu nhiên. |
-| **Xác thực 2FA (TOTP)** | Tương tự Google Authenticator, chuẩn RFC 6238 (mã 6 số, chu kỳ 30s). Nhập khóa Base32, link `otpauth://`, tải ảnh QR hoặc quét trực tiếp màn hình. |
+| **Xác thực 2FA (TOTP)** | Tương tự các ứng dụng xác thực phổ biến, chuẩn RFC 6238 (mã 6 số, chu kỳ 30s). Nhập khóa Base32, link `otpauth://`, tải ảnh QR hoặc quét trực tiếp màn hình. |
 | **Quét mã QR đa nền tảng** | Tích hợp bộ giải mã thuần JavaScript `jsQR`, hoạt động ổn định trên cả Windows, macOS, Linux mà không phụ thuộc API trình duyệt. |
 | **Ghi chú bảo mật (Secure Notes)** | Lưu mã backup 2FA (8 ký tự), mã PIN, câu hỏi bảo mật kèm theo tài khoản. Hỗ trợ tìm kiếm và sao chép nhanh 1 chạm. |
 | **Hồ sơ thanh toán (Google Pay, PayPal, Thẻ)** | Lưu trữ thẻ tín dụng/ghi nợ (Visa, Mastercard, JCB, Amex, Napas...) kèm thông tin thanh toán chuẩn Google Pay / PayPal (Họ tên, Số thẻ, CVV, Hạn thẻ, Địa chỉ đường, Thành phố, Bang/Tỉnh, Zip/Postal code, Email, SĐT). Tích hợp kiểm tra Luhn checksum, che số thẻ và nút sao chép toàn bộ thông tin. |
@@ -22,7 +22,7 @@ Toàn bộ dữ liệu được lưu trữ cục bộ trên máy của bạn qua
 | **Tương thích React/Vue 16+** | Sử dụng Native Value Setter descriptor để tự động điền không bị lỗi nuốt chữ trên form React/Vue. |
 | **Bảo mật bộ nhớ tạm** | Tự động xóa mật khẩu hoặc mã OTP khỏi clipboard sau 30 giây nếu người dùng chưa copy nội dung mới. |
 | **Kiểm tra cập nhật tự động** | Tự động kiểm tra bản mới từ GitHub định kỳ, hiển thị huy hiệu `NEW` khi có phiên bản cập nhật. |
-| **Xuất/Nhập CSV chuẩn** | Tương thích hoàn toàn với Google Password Manager và Bitwarden (`name,url,username,password,note`). |
+| **Xuất/Nhập CSV** | Định dạng CSV phổ biến của các trình quản lý mật khẩu (`name,url,username,password,note`). |
 
 ---
 
@@ -111,7 +111,7 @@ Khi lướt web, bạn có thể click chuột phải vào trang để gọi men
    - Nhấn **Đăng xuất**: Xóa toàn bộ cookies của trang web hiện tại để thoát tài khoản nhanh chóng.
 
 ### 7. Sao lưu và Đồng bộ CSV
-1. Tại tab **Lịch sử**, bấm **Xuất** để tải về file CSV theo định dạng chuẩn Google Password Manager:
+1. Tại tab **Lịch sử**, bấm **Xuất** để tải về file CSV theo định dạng phổ biến của các trình quản lý mật khẩu:
    ```csv
    name,url,username,password,note
    ```
@@ -158,3 +158,12 @@ GenPass chỉ yêu cầu các quyền hạn cần thiết tối thiểu theo chu
 ## Giấy phép
 
 Mã nguồn được phân phối theo giấy phép [MIT License](LICENSE).
+
+Dự án sử dụng các thành phần bên thứ ba theo đúng điều khoản license của chúng, đầy đủ ghi công trong tệp [NOTICE](NOTICE):
+
+| Thành phần | Tệp | Giấy phép | Chủ sở hữu |
+| :--- | :--- | :--- | :--- |
+| jsQR 1.4.0 (giải mã QR) | `jsqr.js` | Apache License 2.0 | Lazar Laszlo (cozmo) |
+| EFF Diceware short wordlist (từ điển Passphrase) | `wordlist.js` | CC BY (EFF) | Electronic Frontier Foundation |
+
+Tên và thương hiệu của bên thứ ba, bao gồm các từ thương hiệu có trong từ điển EFF, thuộc về chủ sở hữu tương ứng và chỉ được dùng cho mục đích nhận diện/tương thích. GenPass không liên kết hay được bảo chứng bởi các chủ sở hữu đó.

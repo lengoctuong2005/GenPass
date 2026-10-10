@@ -1,0 +1,54 @@
+GenPass
+Third-Party Notices
+
+This project includes and/or uses the following third-party components.
+Their respective licenses and attribution notices are reproduced below.
+
+------------------------------------------------------------------------
+
+1. jsQR (file: jsqr.js)
+
+Vendored, minified copy of jsQR v1.4.0 obtained via jsDelivr
+(https://www.jsdelivr.com/package/npm/jsqr@1.4.0).
+
+Copyright (c) 2018 Lazar Laszlo
+Project: https://github.com/cozmo/jsQR
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+------------------------------------------------------------------------
+
+2. EFF Diceware short wordlist (file: wordlist.js)
+
+The 1,296-word list used for Diceware passphrase generation is derived from
+EFF's general short word list (eff_short_wordlist_1.txt), published by the
+Electronic Frontier Foundation:
+
+Joseph Bonneau, "Deep Dive: EFF's New Wordlists for Random Passphrases",
+July 19, 2016
+https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases
+Source file: https://www.eff.org/files/2016/09/08/eff_short_wordlist_1.txt
+
+EFF web content is licensed under a Creative Commons Attribution license
+(see https://www.eff.org/copyright). This project attributes the wordlist
+to the Electronic Frontier Foundation in accordance with those terms.
+
+GenPass is not affiliated with or endorsed by the Electronic Frontier
+Foundation.
+
+------------------------------------------------------------------------
+
+Trademarks: any product or brand names appearing in this project (including
+trademark words contained in the EFF wordlist) are the property of their
+respective owners and are used for identification/compatibility purposes
+only.

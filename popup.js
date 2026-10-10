@@ -1450,7 +1450,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // Google Password Manager standard format: name,url,username,password,note
+    // CSV import/export: name,url,username,password,note (de facto format for password managers)
     const rows = [
       ["name", "url", "username", "password", "note"]
     ];
