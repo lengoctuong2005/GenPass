@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GenPass</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header with tabs -->
+    <header class="app-header">
+      <div class="brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.59 2.04-1.46 2.56L14 15h-4v-2.44A2.99 2.99 0 0 1 9 10c0-1.66 1.34-3 3-3z"/>
+        </svg>
+        <span class="brand-name">GenPass</span>
+      </div>
+      <nav class="nav-tabs">
+        <button id="tab-gen" class="tab-btn active" type="button">Mật khẩu</button>
+        <button id="tab-history" class="tab-btn" type="button">
+          Lịch sử <span id="history-count" class="badge">0</span>
+        </button>
+        <button id="tab-2fa" class="tab-btn" type="button">
+          2FA <span id="count-2fa" class="badge">0</span>
+        </button>
+        <button id="tab-cards" class="tab-btn" type="button">
+          Thanh toán <span id="count-cards" class="badge">0</span>
+        </button>
+        <button id="tab-cookies" class="tab-btn" type="button">
+          Cookies <span id="count-cookies" class="badge">0</span>
+        </button>
+      </nav>
+    </header>
+
+    <!-- Update Banner -->
+    <div id="update-banner" class="update-banner" hidden style="display: none;">
+      <div class="update-info">
+        <span class="update-badge">CẬP NHẬT</span>
+        <span id="update-text">Đã có bản mới!</span>
+      </div>
+      <div class="update-actions">
+        <button type="button" id="btn-view-update" class="update-btn">Xem bản mới</button>
+        <button type="button" id="btn-dismiss-update" class="dismiss-update-btn" title="Đóng">&times;</button>
+      </div>
+    </div>
+
+    <!-- Generator View -->
+    <main id="view-gen" class="view-panel active">
+      <!-- Password output card -->
+      <section class="card output-card">
+        <div class="password-box">
+          <input type="text" id="password-display" readonly spellcheck="false" autocomplete="off">
+          <div class="actions">
+            <button id="btn-toggle-mask" class="icon-btn" title="Ẩn/Hiện mật khẩu" type="button">
+              <svg id="icon-eye" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+            <button id="btn-refresh" class="icon-btn" title="Tạo mật khẩu mới" type="button">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+            </button>
+            <button id="btn-copy" class="btn-primary" title="Sao chép vào clipboard" type="button">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span>Sao chép</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="name-tag-row">
+          <input type="text" id="password-name" placeholder="Tên dịch vụ (vd: Facebook...)" maxlength="40" autocomplete="off">
+          <input type="text" id="password-user" placeholder="Tài khoản / Email..." maxlength="50" autocomplete="off">
+          <select id="password-tag" class="tag-select" title="Chọn nhãn phân loại">
+            <option value="">Không nhãn</option>
+          </select>
+        </div>
+
+        <div class="note-row">
+          <input type="text" id="password-note" placeholder="Ghi chú bảo mật (mã backup 2FA, PIN, câu hỏi bảo mật...)" maxlength="200" autocomplete="off">
+        </div>
+
+        <!-- Strength bar -->
+        <div class="strength-meter">
+          <div class="strength-track">
+            <div id="strength-bar" class="strength-bar"></div>
+          </div>
+          <div class="strength-label">
+            <span>Độ mạnh:</span>
+            <strong id="strength-text">Rất mạnh</strong>
+          </div>
+        </div>
+      </section>
+
+      <!-- Generator Mode Switch -->
+      <div class="gen-mode-switch">
+        <button type="button" id="btn-mode-password" class="mode-btn active">Mật khẩu</button>
+        <button type="button" id="btn-mode-passphrase" class="mode-btn">Cụm từ (Passphrase)</button>
+      </div>
+
+      <!-- Options card: Password Mode -->
+      <section id="panel-mode-password" class="card options-card">
+        <!-- Length slider -->
+        <div class="option-row">
+          <div class="label-group">
+            <label for="length-range">Độ dài</label>
+            <span id="length-val" class="length-badge">16</span>
+          </div>
+          <div class="slider-wrapper">
+            <input type="range" id="length-range" min="5" max="64" value="16">
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Checkbox switches -->
+        <div class="toggles-grid">
+          <label class="toggle-item">
+            <input type="checkbox" id="opt-upper" checked>
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Chữ hoa (A-Z)</span>
+          </label>
+
+          <label class="toggle-item">
+            <input type="checkbox" id="opt-lower" checked>
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Chữ thường (a-z)</span>
+          </label>
+
+          <label class="toggle-item">
+            <input type="checkbox" id="opt-numbers" checked>
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Chữ số (0-9)</span>
+          </label>
+
+          <label class="toggle-item">
+            <input type="checkbox" id="opt-special" checked>
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Ký tự đặc biệt (!@#$%^&*)</span>
+          </label>
+
+          <label class="toggle-item full-width">
+            <input type="checkbox" id="opt-avoid-ambiguous">
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Tránh ký tự nhầm lẫn (l, 1, I, O, 0, v.v.)</span>
+          </label>
+        </div>
+
+        <!-- Advanced options -->
+        <details class="advanced-section">
+          <summary>Tùy chọn nâng cao</summary>
+          <div class="advanced-content">
+            <div class="min-req-row">
+              <label for="min-numbers">Tối thiểu số lượng số:</label>
+              <input type="number" id="min-numbers" min="0" max="10" value="1">
+            </div>
+            <div class="min-req-row">
+              <label for="min-special">Tối thiểu ký tự đặc biệt:</label>
+              <input type="number" id="min-special" min="0" max="10" value="1">
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <!-- Options card: Passphrase Mode -->
+      <section id="panel-mode-passphrase" class="card options-card" hidden>
+        <!-- Words slider -->
+        <div class="option-row">
+          <div class="label-group">
+            <label for="passphrase-words-range">Số lượng từ</label>
+            <span id="passphrase-words-val" class="length-badge">4</span>
+          </div>
+          <div class="slider-wrapper">
+            <input type="range" id="passphrase-words-range" min="3" max="10" value="4">
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Separator -->
+        <div class="option-row">
+          <div class="label-group">
+            <label for="passphrase-separator">Ký tự phân cách</label>
+          </div>
+          <select id="passphrase-separator" class="select-input">
+            <option value="-">Gạch ngang ( - )</option>
+            <option value="_">Gạch dưới ( _ )</option>
+            <option value=".">Dấu chấm ( . )</option>
+            <option value=" ">Khoảng trắng ( space )</option>
+            <option value=",">Dấu phẩy ( , )</option>
+          </select>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Toggles -->
+        <div class="toggles-grid">
+          <label class="toggle-item">
+            <input type="checkbox" id="opt-passphrase-capitalize" checked>
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Viết hoa chữ đầu (Word)</span>
+          </label>
+
+          <label class="toggle-item">
+            <input type="checkbox" id="opt-passphrase-number">
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Kèm số ngẫu nhiên (0-9)</span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Common Settings -->
+      <section class="card options-card">
+        <label class="toggle-item full-width">
+          <input type="checkbox" id="opt-autosave-prompt" checked>
+          <span class="checkbox-custom"></span>
+          <span class="toggle-label">Hỏi lưu mật khẩu khi đăng ký / đăng nhập</span>
+        </label>
+
+        <label class="toggle-item full-width" style="margin-top: 6px;">
+          <input type="checkbox" id="opt-autofill" checked>
+          <span class="checkbox-custom"></span>
+          <span class="toggle-label">Gợi ý tự động điền mật khẩu trên trang web</span>
+        </label>
+
+        <label class="toggle-item full-width" style="margin-top: 6px;">
+          <input type="checkbox" id="opt-auto-clear-clipboard" checked>
+          <span class="checkbox-custom"></span>
+          <span class="toggle-label">Tự động xóa clipboard sau 30 giây</span>
+        </label>
+      </section>
+    </main>
+
+    <!-- History View -->
+    <main id="view-history" class="view-panel">
+      <div class="history-header">
+        <span class="history-title">Lịch sử</span>
+        <div class="history-header-actions">
+          <input type="file" id="input-import-csv" accept=".csv,text/csv" style="display: none;">
+          <button id="btn-import-csv" class="btn-text" type="button" title="Nhập mật khẩu từ file CSV">Nhập</button>
+          <button id="btn-export-csv" class="btn-text" type="button" title="Xuất CSV cho Google Password Manager">Xuất</button>
+          <button id="btn-open-tags" class="btn-text" type="button" title="Quản lý danh sách nhãn">Nhãn</button>
+          <button id="btn-clear-history" class="btn-text danger" type="button" title="Xóa toàn bộ lịch sử">Xóa</button>
+        </div>
+      </div>
+
+      <!-- Tag filter bar -->
+      <div id="tag-filter-bar" class="tag-filter-bar">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Live Search Bar -->
+      <div class="search-history-row">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="input-search-history" placeholder="Tìm theo nền tảng, tài khoản, URL..." autocomplete="off">
+        <button type="button" id="btn-clear-search" class="clear-search-btn" title="Xóa tìm kiếm" hidden>&times;</button>
+      </div>
+
+      <div id="history-list" class="history-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- 2FA View -->
+    <main id="view-2fa" class="view-panel">
+      <div class="twofa-header">
+        <span class="twofa-title">Mã 2FA</span>
+        <div class="twofa-header-actions">
+          <input type="file" id="input-qr-file" accept="image/*" style="display: none;">
+          <button id="btn-scan-qr" class="btn-text" type="button" title="Chụp và quét mã QR trên màn hình trang web">Quét QR</button>
+          <button id="btn-upload-qr" class="btn-text" type="button" title="Chọn file ảnh chứa mã QR">Tải ảnh</button>
+          <button id="btn-toggle-add-2fa" class="btn-text" type="button">+ Thêm</button>
+        </div>
+      </div>
+
+      <!-- Add 2FA form card -->
+      <section id="card-add-2fa" class="card add-2fa-card" hidden>
+        <div class="add-2fa-form">
+          <input type="text" id="input-2fa-name" placeholder="Tên dịch vụ (vd: GitHub, Google...)" maxlength="40" autocomplete="off">
+          <input type="text" id="input-2fa-secret" placeholder="Khóa bí mật (Secret Key) hoặc link otpauth://" autocomplete="off">
+          <div class="add-2fa-actions">
+            <button id="btn-cancel-2fa" class="btn-text" type="button">Hủy</button>
+            <button id="btn-save-2fa" class="btn-primary" type="button">Lưu mã 2FA</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2FA list -->
+      <div id="list-2fa" class="twofa-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Cards / Payment Profile View -->
+    <main id="view-cards" class="view-panel">
+      <div class="cards-header">
+        <span class="cards-title">Hồ sơ thanh toán</span>
+        <div class="cards-header-actions">
+          <button id="btn-toggle-add-card" class="btn-text" type="button">+ Thêm hồ sơ</button>
+        </div>
+      </div>
+
+      <!-- Add/Edit Card form card -->
+      <section id="card-add-card" class="card add-card-form-card" hidden>
+        <div class="add-card-form">
+          <input type="text" id="input-card-name" placeholder="Tên hồ sơ / Thẻ (vd: Google Pay Visa, PayPal MB...)" maxlength="50" autocomplete="off">
+          <input type="text" id="input-card-holder" placeholder="Tên chủ thẻ (vd: NGUYEN VAN A)" maxlength="50" autocomplete="off">
+
+          <div class="card-number-row">
+            <input type="text" id="input-card-number" placeholder="Số thẻ (16 số)..." maxlength="23" autocomplete="off">
+            <span id="card-brand-badge" class="card-brand-badge">THẺ</span>
+          </div>
+
+          <div class="card-sub-row">
+            <div class="card-sub-field">
+              <label for="input-card-exp">Hạn thẻ</label>
+              <input type="text" id="input-card-exp" placeholder="MM/YY" maxlength="5" autocomplete="off">
+            </div>
+            <div class="card-sub-field">
+              <label for="input-card-cvv">Mã CVV</label>
+              <div class="cvv-input-wrapper">
+                <input type="password" id="input-card-cvv" placeholder="•••" maxlength="4" autocomplete="off">
+                <button type="button" id="btn-toggle-card-cvv" class="cvv-eye-btn" title="Ẩn/Hiện CVV">
+                  <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Billing & Payment Address Section (Google Pay / PayPal / Stripe) -->
+          <div class="billing-section-divider">
+            <span>ĐỊA CHỈ THANH TOÁN (GOOGLE PAY / PAYPAL)</span>
+          </div>
+
+          <div class="card-sub-row">
+            <input type="email" id="input-card-email" placeholder="Email thanh toán..." maxlength="50" autocomplete="off">
+            <input type="text" id="input-card-phone" placeholder="Số điện thoại..." maxlength="25" autocomplete="off">
+          </div>
+
+          <input type="text" id="input-card-address" placeholder="Địa chỉ đường / Số nhà (Address line)..." maxlength="120" autocomplete="off">
+
+          <div class="card-sub-row">
+            <input type="text" id="input-card-city" placeholder="Thành phố (City)..." maxlength="50" autocomplete="off">
+            <input type="text" id="input-card-state" placeholder="Tỉnh / Bang (State/Province)..." maxlength="50" autocomplete="off">
+          </div>
+
+          <div class="card-sub-row">
+            <input type="text" id="input-card-zip" placeholder="Mã Zip / Postal Code (vd: 100000, 94043)..." maxlength="20" autocomplete="off">
+            <input type="text" id="input-card-country" placeholder="Quốc gia (vd: VN, US, Singapore)..." maxlength="40" autocomplete="off">
+          </div>
+
+          <input type="text" id="input-card-note" placeholder="Ghi chú bảo mật (Mã PIN, chi nhánh ngân hàng...)" maxlength="150" autocomplete="off">
+
+          <div class="add-card-actions">
+            <button id="btn-cancel-card" class="btn-text" type="button">Hủy</button>
+            <button id="btn-save-card" class="btn-primary" type="button">Lưu hồ sơ</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live Search Bar -->
+      <div class="search-history-row" id="search-cards-row">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="input-search-cards" placeholder="Tìm theo tên thẻ, chủ thẻ, thành phố, zip..." autocomplete="off">
+        <button type="button" id="btn-clear-cards-search" class="clear-search-btn" title="Xóa tìm kiếm" hidden>&times;</button>
+      </div>
+
+      <!-- Cards list -->
+      <div id="list-cards" class="cards-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Cookies View (Multi-Account & Session Switcher by Domain) -->
+    <main id="view-cookies" class="view-panel">
+      <div class="cookies-header">
+        <div class="cookies-title-group">
+          <span class="cookies-title">Quản lý Cookies</span>
+          <span id="cookies-current-domain" class="cookies-domain-badge">...</span>
+        </div>
+        <div class="cookies-header-actions">
+          <button id="btn-toggle-add-cookie-profile" class="btn-text" type="button" title="Lưu toàn bộ cookies hiện tại của domain thành một tài khoản/phiên">+ Lưu phiên</button>
+          <button id="btn-toggle-import-cookies" class="btn-text" type="button" title="Dán hoặc nhập danh sách cookies dạng JSON">Nhập</button>
+          <button id="btn-export-current-cookies" class="btn-text" type="button" title="Sao chép toàn bộ cookies hiện tại của trang web ra JSON">Xuất</button>
+          <button id="btn-clear-domain-cookies" class="btn-text danger" type="button" title="Xóa toàn bộ cookies của trang web này để đăng xuất">Đăng xuất</button>
+        </div>
+      </div>
+
+      <!-- Domain Filter Bar -->
+      <div id="cookies-filter-bar" class="tag-filter-bar">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Save Session Form -->
+      <section id="card-save-cookie-profile" class="card add-card-form-card" hidden>
+        <div class="add-card-form">
+          <input type="text" id="input-cookie-profile-name" placeholder="Tên phiên / Tài khoản (vd: Nick 1 - Admin, Acc Phụ...)" maxlength="50" autocomplete="off">
+          <div class="add-card-actions">
+            <button id="btn-cancel-save-cookie-profile" class="btn-text" type="button">Hủy</button>
+            <button id="btn-confirm-save-cookie-profile" class="btn-primary" type="button">Lưu phiên này</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Import JSON Box -->
+      <section id="card-import-cookies" class="card add-card-form-card" hidden>
+        <div class="add-card-form">
+          <textarea id="textarea-import-cookies-json" class="csv-textarea" rows="4" placeholder="Dán mảng JSON cookies (chuẩn Cookie-Editor: [{ name, value, domain, ... }])" autocomplete="off" spellcheck="false"></textarea>
+          <div class="add-card-actions">
+            <button id="btn-cancel-import-cookies" class="btn-text" type="button">Hủy</button>
+            <button id="btn-confirm-import-cookies" class="btn-primary" type="button">Nhập & Áp dụng</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Live Search Cookie Profiles -->
+      <div class="search-history-row" id="search-cookies-row">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="text" id="input-search-cookies" placeholder="Tìm theo tên phiên, tài khoản..." autocomplete="off">
+        <button type="button" id="btn-clear-cookies-search" class="clear-search-btn" title="Xóa tìm kiếm" hidden>&times;</button>
+      </div>
+
+      <!-- Cookie profiles list for domain -->
+      <div id="list-cookie-profiles" class="cookie-profiles-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Modal Quản lý nhãn -->
+    <div id="modal-tags" class="modal-backdrop" hidden>
+      <div class="modal-container">
+        <div class="modal-header">
+          <span class="modal-title">Quản lý nhãn</span>
+          <button id="btn-close-modal" class="icon-btn-small" type="button" title="Đóng">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="tag-add-row">
+            <input type="text" id="input-new-tag" placeholder="Tên nhãn mới..." maxlength="20" autocomplete="off">
+            <button id="btn-add-tag" class="btn-primary" type="button">Thêm</button>
+          </div>
+          <div id="tags-manage-list" class="tags-manage-list">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Nhập CSV -->
+    <div id="modal-import-csv" class="modal-backdrop" hidden>
+      <div class="modal-container" style="max-width: 340px;">
+        <div class="modal-header">
+          <span class="modal-title">Nhập mật khẩu (CSV)</span>
+          <button id="btn-close-import-modal" class="icon-btn-small" type="button" title="Đóng">&times;</button>
+        </div>
+        <div class="modal-body" style="gap: 12px; display: flex; flex-direction: column;">
+          <div id="csv-drop-zone" class="csv-drop-zone">
+            <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <span class="drop-text">Kéo thả file .csv vào đây hoặc</span>
+            <button id="btn-modal-choose-file" class="btn-primary" type="button" style="padding: 6px 14px; font-size: 12px;">Chọn file từ máy tính</button>
+          </div>
+
+          <div class="modal-divider">
+            <span>HOẶC DÁN NỘI DUNG</span>
+          </div>
+
+          <div class="csv-paste-area">
+            <textarea id="textarea-import-csv" class="csv-textarea" rows="3" placeholder="Dán nội dung CSV (từ Google Password, Bitwarden...)" autocomplete="off" spellcheck="false"></textarea>
+            <button id="btn-modal-import-text" class="btn-secondary full-width" type="button" style="margin-top: 6px;">Nhập từ nội dung đã dán</button>
+          </div>
+
+          <div class="import-help-row">
+            <span id="import-tab-note" class="text-muted" style="font-size: 11px;">Trình duyệt tự tắt popup khi chọn file?</span>
+            <button id="btn-open-tab-import" class="btn-link" type="button">Mở trong tab riêng</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="toast">Đã sao chép vào bộ nhớ tạm!</div>
+  </div>
+
+  <script src="jsqr.js"></script>
+  <script src="wordlist.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
