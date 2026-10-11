@@ -23,6 +23,14 @@ try {
   console.warn("Failed to import wordlist.js:", e);
 }
 
+// Mac dinh session chi danh cho trusted contexts (popup/SW); dat tuong minh de content script khong doc duoc
+try {
+  if (chrome.storage && chrome.storage.session && chrome.storage.session.setAccessLevel) {
+    const r = chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+    if (r && typeof r.catch === "function") r.catch(() => {});
+  }
+} catch (e) { /* bo qua: API cu chi ho tro callback */ }
+
 // 1. Setup Hierarchical Context Menus
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
@@ -654,9 +662,16 @@ if (chrome.alarms) {
 
 // Tu khoa khi dong popup: task bat dong bo cua popup bi huy khi trinh trinh popup bi dung,
 // nhung su kien tat cong ket noi cua SW thi khong. Popup mo cong "vault-session" khi hoat dong.
+// Dem so cong dang mo va chi thu hoi khoa phien khi cong cuoi cung dong, neu khong
+// viec dong mot popup se khoa nham nhung popup / side panel dang con hoat dong.
+let vaultPortCount = 0;
 chrome.runtime.onConnect.addListener((port) => {
   if (!port || port.name !== "vault-session") return;
+  vaultPortCount++;
   port.onDisconnect.addListener(async () => {
+    vaultPortCount = Math.max(0, vaultPortCount - 1);
+    // Chi thu hoi khoa phien khi popup cuoi cung dong, tranh dong nham giua nhieu popup
+    if (vaultPortCount > 0) return;
     try {
       const { genOptions } = await chrome.storage.local.get("genOptions");
       if (genOptions && genOptions.vaultLockClose) {

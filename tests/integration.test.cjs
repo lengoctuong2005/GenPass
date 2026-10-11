@@ -68,27 +68,29 @@ function short(v, n = 90) {
 
 const BUGS = {
   "BUG-1": {
-    title: "auto-lock on popup close is OFF by default and is persisted as OFF",
+    title: "vaultEnable() persisted the options before syncing the lock-on-close checkbox",
     evidence: [
-      "popup.js:392   let vaultOpts = { vaultEnabled: false, vaultLockClose: false, vaultTimeoutMin: 15 };",
-      "popup.js:1310  vaultOpts.vaultLockClose = o.vaultLockClose !== false;  // documented default: ON",
-      "popup.js:1143  saveOptions(getOptions()) runs BEFORE vaultSyncSettings() at popup.js:1146",
-      "background.js:662 reads genOptions.vaultLockClose from storage -> false -> keeps the session key",
-      "README.md:170  'Mac dinh khoa khi dong popup' (default: lock when the popup closes)"
+      "popup.js:392   let vaultOpts = { vaultEnabled: false, vaultLockClose: true, vaultTimeoutMin: 15 };",
+      "popup.js:1320  vaultOpts.vaultLockClose = o.vaultLockClose !== false;  // documented default: ON",
+      "popup.js:1153  vaultSyncSettings();        // vaultOpts -> checkbox",
+      "popup.js:1154  saveOptions(getOptions());  // checkbox -> genOptions, must run after the sync",
+      "background.js:667-681 counts the \"vault-session\" ports and only then revokes genVaultKey",
+      "README.md:173  'Mac dinh khoa khi dong popup' (default: lock when the popup closes)"
     ],
-    impact: "first-time vault enable stores vaultLockClose:false, so pagehide (popup.js:2447-2455) " +
-            "returns early and the service-worker port path (background.js:657-667) keeps genVaultKey. " +
-            "Reopening the popup then silently auto-unlocks (popup.js:1363-1380)."
+    impact: "the first-time enable used to call saveOptions(getOptions()) first, so genOptions stored the " +
+            "stale vaultOpts default with vaultLockClose:false. With that value the service-worker port path " +
+            "(background.js:677-679) kept genVaultKey when the last popup closed, and the next reopen then " +
+            "silently auto-unlocked (popup.js:1367-1396). The T2 check pins the fixed order and default."
   },
   "BUG-2": {
-    title: "vaultEnable() syncs the lock-on-close checkbox AFTER saving the options",
+    title: "vaultEnable() overwrote the lock-on-close checkbox after saving the options",
     evidence: [
-      "popup.js:1143  saveOptions(getOptions());      // reads the checkbox",
-      "popup.js:1146  vaultSyncSettings();            // overwrites the checkbox from stale vaultOpts"
+      "popup.js:1153  vaultSyncSettings();        // must run BEFORE saveOptions",
+      "popup.js:1154  saveOptions(getOptions());  // reads the checkbox back from the UI"
     ],
-    impact: "the user's tick in 'Tu khoa ngay khi dong popup' is wiped from the UI right after the " +
-            "vault is enabled; only the value already copied into storage keeps working, via the " +
-            "service-worker port path."
+    impact: "saving first and syncing afterwards let a stale vaultOpts overwrite the user's tick in " +
+            "'Tu khoa ngay khi dong popup' right after the vault was enabled, so the UI disagreed with the " +
+            "value already copied into storage. The T2 check pins the fixed order."
   }
 };
 
@@ -591,6 +593,19 @@ function makeChrome(store, manifest) {
   const menuListeners = [];
   const ports = [];
 
+  // Call log, credited to the realm that made the call. `usage` above only says
+  // WHICH chrome method was touched, never by whom nor with what argument, so it
+  // cannot answer "did the popup send vault_lock on pagehide?". Every realm gets
+  // its own view of this fake (see realmView), so a call is credited correctly
+  // even when it happens inside an async continuation of that realm, which is
+  // exactly what the service worker does in its onDisconnect handler.
+  const CALL_LOG_LIMIT = 20000; // cap: a harness bug must not eat all RAM
+  const callLog = [];
+  function logCall(realm, apiPath, arg) {
+    if (callLog.length >= CALL_LOG_LIMIT) return;
+    callLog.push({ realm, api: apiPath, arg });
+  }
+
   function addListener(list, fn) {
     const entry = { fn, owner: currentOwner };
     list.push(entry);
@@ -688,6 +703,8 @@ function makeChrome(store, manifest) {
     const name = (info && info.name) || "";
     const pMsg = [];
     const pDisc = [];
+    // the realm that opened the port is the realm that closes it
+    const portRealm = currentOwner;
     const port = {      name,
       sender: { id: manifest.name, url: "chrome-extension://genpassfake/popup.html", tab: undefined },
       error: null,
@@ -704,6 +721,7 @@ function makeChrome(store, manifest) {
         const i = ports.indexOf(port);
         if (i >= 0) ports.splice(i, 1);
         usage.add("runtime.port.disconnect(" + name + ")");
+        logCall(portRealm, "chrome.runtime.port.disconnect(" + name + ")", null);
         for (const fn of pDisc.slice()) {
           try { fn(port); } catch (e) { HARNESS_LOG.push("[chrome stub] onDisconnect threw: " + e); }
         }
@@ -826,10 +844,52 @@ function makeChrome(store, manifest) {
     permissions: { contains: () => Promise.resolve(true), request: () => Promise.resolve(true) }
   };
 
+  // Per-realm view of the shared fake. It only overrides the callable surfaces;
+  // listeners still register on the ONE shared fake, exactly like a real browser.
+  function realmView(realm) {
+    const view = Object.create(api);
+    const runtime = Object.create(api.runtime);
+    runtime.sendMessage = function (msg, cb) {
+      logCall(realm, "chrome.runtime.sendMessage", msg);
+      return api.runtime.sendMessage(msg, cb);
+    };
+    runtime.connect = function (info) {
+      logCall(realm, "chrome.runtime.connect", info);
+      return api.runtime.connect(info);
+    };
+    view.runtime = runtime;
+    const storage = Object.create(api.storage);
+    for (const area of ["local", "session"]) {
+      const base = api.storage[area];
+      const wrapped = Object.create(base);
+      wrapped.get = function (keys, cb) {
+        logCall(realm, "chrome.storage." + area + ".get", keys);
+        return base.get(keys, cb);
+      };
+      wrapped.set = function (items, cb) {
+        logCall(realm, "chrome.storage." + area + ".set", items && Object.keys(items));
+        return base.set(items, cb);
+      };
+      wrapped.remove = function (keys, cb) {
+        logCall(realm, "chrome.storage." + area + ".remove", keys);
+        return base.remove(keys, cb);
+      };
+      wrapped.clear = function (cb) {
+        logCall(realm, "chrome.storage." + area + ".clear", null);
+        return base.clear(cb);
+      };
+      storage[area] = wrapped;
+    }
+    view.storage = storage;
+    return view;
+  }
+
   // harness-only handles (prefixed __ so source code never collides with them)
   api.__ = {
     usage,
     ports,
+    callLog,
+    realmView,
     openPorts: () => ports.slice(),
     firePortDisconnect: (name) => {
       for (const p of ports.slice()) {
@@ -884,9 +944,9 @@ const NAVIGATOR = {
   onLine: true
 };
 
-function makeSandbox(api, dom) {
+function makeSandbox(view, dom) {
   const sandbox = {
-    chrome: api,
+    chrome: view,
     document: dom.document,
     window: dom.window,
     navigator: NAVIGATOR,
@@ -933,7 +993,7 @@ function runIn(ctx, file) {
 // importScripts("vendor/hash-wasm.umd.js") / "vault.js" / "jsqr.js" / "wordlist.js".
 function bootWorker(api) {
   const dom = createDom();
-  const sandbox = makeSandbox(api, dom);
+  const sandbox = makeSandbox(api.__.realmView("service-worker"), dom);
   sandbox.self = sandbox;
   sandbox.importScripts = (...ps) => {
     for (const p of ps) runIn(ctx, path.join(ROOT, p));
@@ -950,14 +1010,14 @@ const POPUP_DOMS = [];
 function openPopup(api, opts) {
   const options = opts || {};
   const dom = createDom();
-  const sandbox = makeSandbox(api, dom);
+  const token = "popup-" + (++openPopup.seq);
+  api.__.setOwner(token);
+  const sandbox = makeSandbox(api.__.realmView(token), dom);
   sandbox.self = sandbox;
   sandbox.importScripts = (...ps) => {
     for (const p of ps) runIn(ctx, path.join(ROOT, p));
   };
   const ctx = vm.createContext(sandbox);
-  const token = "popup-" + (++openPopup.seq);
-  api.__.setOwner(token);
   for (const f of ["vendor/hash-wasm.umd.js", "vault.js", "wordlist.js"]) {
     runIn(ctx, path.join(ROOT, f));
   }
@@ -1228,6 +1288,7 @@ flow("T3", "Relock on popup close - session key must not survive (user bug)", as
     "hasText(facebook)=" + popup.dom.hasText("Facebook"));
 
   // --- the popup closes: pagehide, then the service worker notices the port
+  const callMark = chromeApi.__.callLog.length;
   popup.pagehide();
   const openPorts = chromeApi.__.openPorts().map((p) => p.name);
   check("a vault-session port was open before close", openPorts.indexOf("vault-session") >= 0,
@@ -1238,9 +1299,23 @@ flow("T3", "Relock on popup close - session key must not survive (user bug)", as
   const used = Array.from(chromeApi.__.usage);
   check("service worker received the port disconnect", used.indexOf("runtime.port.disconnect(vault-session)") >= 0,
     "usage has runtime.port.disconnect(vault-session)");
-  check("popup asked the worker to lock (vault_lock) (BUG-1)",
-    used.indexOf("chrome.runtime.sendMessage") >= 0,
-    "chrome.runtime.sendMessage in usage: " + (used.indexOf("chrome.runtime.sendMessage") >= 0), "BUG-1");
+  // Revoking the session is no longer the popup's job. Closing one popup used to
+  // send vault_lock and drop genVaultKey itself, which also wiped the shared
+  // session of every other popup / side panel still open. The service worker
+  // counts the "vault-session" ports (background.js:667-681) and is the only
+  // authority now, so pagehide must send no vault_lock and must not touch
+  // chrome.storage.session at all.
+  const closeCalls = chromeApi.__.callLog.slice(callMark);
+  const popupCloseCalls = closeCalls.filter((c) => c.realm === popup.token);
+  const workerCloseCalls = closeCalls.filter((c) => c.realm === "service-worker");
+  const lockMsgs = closeCalls.filter((c) =>
+    c.api === "chrome.runtime.sendMessage" && c.arg && c.arg.action === "vault_lock");
+  const popupSessionRemoves = popupCloseCalls.filter((c) => c.api === "chrome.storage.session.remove");
+  check("popup sends no vault_lock and no storage.session.remove on pagehide",
+    lockMsgs.length === 0 && popupSessionRemoves.length === 0,
+    "vault_lock messages=" + lockMsgs.length + ", popup storage.session.remove=" + popupSessionRemoves.length +
+      " | popup calls on pagehide: " + (popupCloseCalls.map((c) => c.api).join(", ") || "(none)") +
+      " | worker calls in the same window: " + (workerCloseCalls.map((c) => c.api).join(", ") || "(none)"));
   check("service worker ran its onConnect/onDisconnect handler", used.indexOf("chrome.runtime.connect") >= 0,
     "chrome.runtime.connect in usage: " + (used.indexOf("chrome.runtime.connect") >= 0));
 

@@ -134,7 +134,7 @@ GenPass/
 ├── wordlist.js         # Từ điển Diceware EFF chuẩn 1,296 từ cho Passphrase
 ├── vault.js            # Lõi mã hóa kho: Argon2id -> AES-256-GCM (chỉ chạy ở popup/service worker)
 ├── vendor/hash-wasm.umd.js  # Thư viện Argon2id WebAssembly (MIT, đóng gói sẵn, chạy offline)
-├── tests/              # Kiểm thử crypto + tích hợp popup/service worker (node tests/*.cjs)
+├── tests/              # Kiểm thử crypto + tích hợp popup/service worker (node tests/*.cjs); e2e-chrome.cjs cần Chrome thật
 ├── icons/              # Biểu tượng tiện ích (16px, 48px, 128px)
 ├── .gitignore          # Cấu hình bỏ qua tệp hệ thống khi quản lý phiên bản
 └── README.md           # Hướng dẫn sử dụng chi tiết

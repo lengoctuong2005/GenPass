@@ -1008,7 +1008,9 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       vaultPort = chrome.runtime.connect({ name: "vault-session" });
       vaultPort.onDisconnect.addListener(() => {
-        vaultPort = null; // SW chet; lan mo popup sau tu ket noi lai
+        vaultPort = null;
+        // SW bi kill giua chung: ket noi lai sau 500ms neu popup van mo va kho van mo
+        if (vaultOn) setTimeout(() => { if (vaultOn) vaultPortConnect(); }, 500);
       });
     } catch (err) {
       vaultPort = null;
@@ -1072,6 +1074,14 @@ document.addEventListener("DOMContentLoaded", () => {
     if (el) el.hidden = true;
   }
 
+  // Doi nhan nut trong luc Argon2id chay de nguoi dung khong bam lap
+  // nhan cuoi cung la chuoi khoi phuc, tranh phu thuoc vao dataset cua DOM gia
+  function vaultBusy(btn, busy, label) {
+    if (!btn) return;
+    if (label) btn.textContent = label;
+    btn.disabled = !!busy;
+  }
+
   function vaultRunAfterUnlock() {
     if (els.vaultLock) els.vaultLock.hidden = true;
     const cb = vaultDeferredCb;
@@ -1087,7 +1097,7 @@ document.addEventListener("DOMContentLoaded", () => {
       vaultShowError(els.vaultLockError, "Nhập mã PIN");
       return;
     }
-    if (els.vaultUnlockBtn) els.vaultUnlockBtn.disabled = true;
+    vaultBusy(els.vaultUnlockBtn, true, "Đang mở khóa…");
     try {
       const { data, keyB64 } = await GPVault.unlockWithPin(vaultBlob, pin);
       vaultFill(data, keyB64); // keyB64 la chuoi base64 cua key tho
@@ -1105,7 +1115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         els.vaultPin.focus();
       }
     } finally {
-      if (els.vaultUnlockBtn) els.vaultUnlockBtn.disabled = false;
+      vaultBusy(els.vaultUnlockBtn, false, "Mở khóa");
     }
   }
 
@@ -1205,7 +1215,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function vaultSecretLabel(s) {
     if (s.length < 8) return "Yếu";
-    if (!/\D/.test(s)) return "Trung bình";
+    if (!/\D/.test(s)) return s.length < 10 ? "Yếu" : "Trung bình"; // chi so: <10 yeu, tu 10 so tro len trung binh
     if (s.length >= 12) return "Mạnh";
     return "Trung bình";
   }
@@ -1245,7 +1255,7 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       vaultHideError(els.vaultPinError);
     }
-    if (els.btnVaultPinSave) els.btnVaultPinSave.disabled = true;
+    vaultBusy(els.btnVaultPinSave, true, "Đang lưu…");
     try {
       if (vaultPinMode === "change") await vaultChangePin(secret);
       else await vaultEnable(secret);
@@ -1254,7 +1264,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error("Lưu PIN thất bại:", err);
       vaultShowError(els.vaultPinError, "Không lưu được mã PIN");
     } finally {
-      if (els.btnVaultPinSave) els.btnVaultPinSave.disabled = false;
+      vaultBusy(els.btnVaultPinSave, false, "Lưu mã PIN");
     }
   }
 
@@ -1264,7 +1274,7 @@ document.addEventListener("DOMContentLoaded", () => {
       vaultShowError(els.vaultOffError, "Nhập mã PIN");
       return;
     }
-    if (els.btnVaultOffConfirm) els.btnVaultOffConfirm.disabled = true;
+    vaultBusy(els.btnVaultOffConfirm, true, "Đang xử lý…");
     try {
       await vaultDisable(pin);
       if (els.modalVaultDisable) els.modalVaultDisable.hidden = true;
@@ -1272,7 +1282,7 @@ document.addEventListener("DOMContentLoaded", () => {
       console.warn("Tắt kho thất bại:", err);
       vaultShowError(els.vaultOffError, "Mã PIN không đúng");
     } finally {
-      if (els.btnVaultOffConfirm) els.btnVaultOffConfirm.disabled = false;
+      vaultBusy(els.btnVaultOffConfirm, false, "Giải mã & tắt");
     }
   }
 
@@ -2443,15 +2453,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Dong popup la khoa lai neu nguoi dung bat tuy chon nay
+  // Dong popup: chi ngat heartbeat va port "vault-session" cua chinh popup nay.
+  // Thu hoi khoa phien khi dong popup do SW dem so cong "vault-session" (background.js)
+  // quyet dinh. Khong tu xoa genVaultKey o day: se khoa nham popup/side panel khac dang mo.
   window.addEventListener("pagehide", () => {
     vaultSessionStop();
-    if (!vaultOn) return;
-    if (!els.optVaultLockClose?.checked) return; // khong tu khoa thi giu phien
-    if (chrome?.runtime?.sendMessage) {
-      chrome.runtime.sendMessage({ action: "vault_lock" }, () => void chrome.runtime.lastError);
-    }
-    if (chrome?.storage?.session) chrome.storage.session.remove("genVaultKey");
   });
 
   els.passwordName.addEventListener("keydown", (e) => {
