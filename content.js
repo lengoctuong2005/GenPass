@@ -14,6 +14,18 @@
     return window.location.hostname.replace(/^www\./i, "");
   }
 
+  function sameDomain(a, b) {
+    try {
+      return new URL(a).hostname.replace(/^www\./i, "") === new URL(b).hostname.replace(/^www\./i, "");
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isFillable(el) {
+    return el && el.type !== "hidden" && (el.offsetParent !== null || el.getClientRects().length > 0);
+  }
+
   function showInPageToast(message) {
     if (activeToast) activeToast.remove();
     const toast = document.createElement("div");
@@ -35,6 +47,35 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  // Kho dang bat: content script khong tu giai mai, nho service worker lam
+  function vaultEnabled(res) {
+    return !!res && res.genOptions && res.genOptions.vaultEnabled === true;
+  }
+
+  function gpGet(keys, cb) {
+    chrome.storage.local.get(["genOptions"], (o) => {
+      if (!vaultEnabled(o)) {
+        chrome.storage.local.get(keys, cb);
+        return;
+      }
+      chrome.runtime.sendMessage({ action: "vault_get", keys: keys }, (res) => {
+        cb(res && res.__locked ? {} : (res || {}));
+      });
+    });
+  }
+
+  function gpSet(items, cb) {
+    chrome.storage.local.get(["genOptions"], (o) => {
+      if (!vaultEnabled(o)) {
+        chrome.storage.local.set(items, cb);
+        return;
+      }
+      chrome.runtime.sendMessage({ action: "vault_put", items: items }, (res) => {
+        if (cb) cb(res || {});
+      });
+    });
   }
 
   // Set input value using native prototype descriptor to bypass React/Vue 16+ synthetic event value interception
@@ -92,9 +133,10 @@
     return el && el.value ? el.value.trim() : "";
   }
 
+  // Autofill chỉ điền khi origin khớp và ô nhập đang hiện hình, tránh lộ credential sang trang/ô khác
   // --- Auto-Fill Badge on Web Inputs ---
   function initAutoFillBadges() {
-    chrome.storage.local.get(["genOptions", "genHistory"], (res) => {
+    gpGet(["genOptions", "genHistory"], (res) => {
       if (res.genOptions && res.genOptions.autoFillBadge === false) {
         return; // Disabled by user
       }
@@ -102,9 +144,9 @@
       const domain = extractDomain().toLowerCase();
       const history = Array.isArray(res.genHistory) ? res.genHistory : [];
       const matching = history.filter(h => {
-        const nameMatch = h.name && (h.name.toLowerCase() === domain || domain.includes(h.name.toLowerCase()));
-        const urlMatch = h.url && h.url.toLowerCase().includes(domain);
-        return nameMatch || urlMatch;
+        // autofill chỉ điền khi origin khớp: có url thì bắt buộc cùng host, không url thì giữ khớp theo tên
+        if (h.url) return sameDomain(h.url, location.href);
+        return !!(h.name && (h.name.toLowerCase() === domain || domain.includes(h.name.toLowerCase())));
       });
 
       if (matching.length === 0) return;
@@ -158,7 +200,7 @@
   function triggerPrompt(username, password) {
     if (!password || password.length < 3) return;
 
-    chrome.storage.local.get(["genOptions", "genHistory"], (res) => {
+    gpGet(["genOptions", "genHistory"], (res) => {
       if (res.genOptions && res.genOptions.autoSavePrompt === false) {
         return; // Disabled by user
       }
@@ -245,7 +287,7 @@
     // Save button
     const saveBtn = dialog.querySelector("#gp-btn-yes");
     saveBtn.addEventListener("click", () => {
-      chrome.storage.local.get(["genHistory"], (res) => {
+      gpGet(["genHistory"], (res) => {
         const history = Array.isArray(res.genHistory) ? res.genHistory : [];
 
         const newItem = {
@@ -262,7 +304,7 @@
         history.unshift(newItem);
         if (history.length > 200) history.pop();
 
-        chrome.storage.local.set({ genHistory: history }, () => {
+        gpSet({ genHistory: history }, () => {
           saveBtn.textContent = "Đã lưu!";
           saveBtn.style.backgroundColor = "#10b981";
           setTimeout(() => {
@@ -385,7 +427,7 @@
   function triggerPaymentPrompt(paymentData) {
     if (!paymentData || !paymentData.cardNumber) return;
 
-    chrome.storage.local.get(["genOptions", "genCards"], (res) => {
+    gpGet(["genOptions", "genCards"], (res) => {
       if (res.genOptions && res.genOptions.autoSavePrompt === false) {
         return; // Disabled by user
       }
@@ -469,7 +511,7 @@
 
     const saveBtn = dialog.querySelector("#gp-btn-pay-yes");
     saveBtn.addEventListener("click", () => {
-      chrome.storage.local.get(["genCards"], (res) => {
+      gpGet(["genCards"], (res) => {
         const cards = Array.isArray(res.genCards) ? res.genCards : [];
         const newCard = {
           id: Date.now().toString(),
@@ -490,7 +532,7 @@
           createdAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN")
         };
         cards.unshift(newCard);
-        chrome.storage.local.set({ genCards: cards }, () => {
+        gpSet({ genCards: cards }, () => {
           saveBtn.textContent = "Đã lưu!";
           saveBtn.style.backgroundColor = "#10b981";
           setTimeout(() => {
@@ -611,7 +653,7 @@
     }
 
     if (msg.action === "trigger_autofill_creds") {
-      chrome.storage.local.get(["genHistory"], (res) => {
+      gpGet(["genHistory"], (res) => {
         const domain = extractDomain().toLowerCase();
         const history = Array.isArray(res.genHistory) ? res.genHistory : [];
         const matching = history.filter(h => {
@@ -627,11 +669,17 @@
         }
 
         const cred = matching[0];
+        // Khớp domain thôi chưa đủ: có url thì phải cùng origin mới được điền
+        if (cred.url && !sameDomain(cred.url, location.href)) {
+          showInPageToast("GenPass: Không tìm thấy tài khoản đã lưu cho trang web này!");
+          sendResponse({ success: false });
+          return;
+        }
         const passInput = document.querySelector('input[type="password"]');
-        if (passInput) {
+        if (passInput && isFillable(passInput)) {
           setNativeValue(passInput, cred.password);
           const userInput = findUsernameInputElement(passInput);
-          if (userInput && cred.username) {
+          if (userInput && cred.username && isFillable(userInput)) {
             setNativeValue(userInput, cred.username);
           }
           showInPageToast(`GenPass: Đã điền thông tin tài khoản "${cred.username || domain}"!`);
@@ -717,6 +765,11 @@
     }
 
     if (msg.action === "fill_2fa" && msg.code) {
+      // OTP chỉ điền ở top frame: chống iframe origin khác đọc được mã
+      if (window.top !== window.self) {
+        sendResponse({ success: false });
+        return true;
+      }
       const cleanCode = msg.code.replace(/\s+/g, "");
 
       // Look for OTP/2FA inputs

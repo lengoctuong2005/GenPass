@@ -66,12 +66,11 @@ function formatCardNumber(num) {
   return clean.replace(/(\d{4})(?=\d)/g, "$1 ").trim();
 }
 
+// Che sach so the, khong de lo 4 so cuoi
 function maskCardNumber(num) {
   const clean = (num || "").replace(/\D/g, "");
-  if (clean.length <= 4) return clean;
-  const last4 = clean.slice(-4);
-  const maskedPrefix = clean.slice(0, -4).replace(/\d/g, "•");
-  return (maskedPrefix + last4).replace(/(.{4})(?=.)/g, "$1 ");
+  const masked = clean.replace(/\d/g, "•");
+  return masked.replace(/(.{4})(?=.)/g, "$1 ");
 }
 
 function formatExpiryDate(val) {
@@ -331,7 +330,32 @@ document.addEventListener("DOMContentLoaded", () => {
     inputSearchCookies: document.getElementById("input-search-cookies"),
     btnClearCookiesSearch: document.getElementById("btn-clear-cookies-search"),
     cookiesFilterBar: document.getElementById("cookies-filter-bar"),
-    listCookieProfiles: document.getElementById("list-cookie-profiles")
+    listCookieProfiles: document.getElementById("list-cookie-profiles"),
+    vaultLock: document.getElementById("vault-lock"),
+    vaultPin: document.getElementById("vault-pin"),
+    vaultUnlockBtn: document.getElementById("vault-unlock-btn"),
+    vaultLockError: document.getElementById("vault-lock-error"),
+    modalVaultPin: document.getElementById("modal-vault-pin"),
+    modalVaultPinTitle: document.getElementById("modal-vault-pin-title"),
+    vaultPinNew: document.getElementById("vault-pin-new"),
+    vaultPinConfirm: document.getElementById("vault-pin-confirm"),
+    vaultPinStrength: document.getElementById("vault-pin-strength"),
+    vaultPinError: document.getElementById("vault-pin-error"),
+    btnVaultPinCancel: document.getElementById("btn-vault-pin-cancel"),
+    btnCloseVaultPin: document.getElementById("btn-close-vault-pin"),
+    btnVaultPinSave: document.getElementById("btn-vault-pin-save"),
+    modalVaultDisable: document.getElementById("modal-vault-disable"),
+    vaultPinOff: document.getElementById("vault-pin-off"),
+    vaultOffError: document.getElementById("vault-off-error"),
+    btnVaultOffCancel: document.getElementById("btn-vault-off-cancel"),
+    btnCloseVaultOff: document.getElementById("btn-close-vault-off"),
+    btnVaultOffConfirm: document.getElementById("btn-vault-off-confirm"),
+    optVaultEnabled: document.getElementById("opt-vault-enabled"),
+    optVaultLockClose: document.getElementById("opt-vault-lock-close"),
+    optVaultTimeout: document.getElementById("opt-vault-timeout"),
+    vaultExtraSettings: document.getElementById("vault-extra-settings"),
+    vaultStatus: document.getElementById("vault-status"),
+    btnVaultChangePin: document.getElementById("btn-vault-change-pin")
   };
 
   let currentGenMode = "password";
@@ -350,9 +374,27 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentCardsSearchQuery = "";
   let isCardCvvMasked = true;
   let unmaskedCardNumbers = new Set();
+  let unmaskedHistoryIds = new Set();
   let tickerInterval = null;
   let currentTabUrl = "";
   let isMasked = false;
+
+  // Che mat khau trong list lich su (mac dinh bat)
+  let maskHistoryPass = true;
+
+  // Kho ma hoa: blob, key phien (chuoi base64) va du lieu dang giai ma
+  let vaultOn = false;
+  let vaultBlob = null;
+  let vaultKey = null; // keyB64 tho, khong con la CryptoKey
+  let vaultData = {};
+  let vaultDeferredCb = null;
+  let vaultPinMode = "set";
+  let vaultOpts = { vaultEnabled: false, vaultLockClose: true, vaultTimeoutMin: 15 };
+  let vaultPort = null; // port toi SW: dong popup thi SW xoa key phien
+  let vaultHeartbeat = null;
+
+  const EYE_ON_SVG = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+  const EYE_OFF_SVG = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
 
   function base32Decode(str) {
     if (!str) return new Uint8Array(0);
@@ -697,7 +739,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function saveTags() {
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ genTags: currentTags });
+      persistKey("genTags", currentTags);
     }
   }
 
@@ -805,7 +847,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 saveTags();
                 if (historyChanged && chrome?.storage?.local) {
-                  chrome.storage.local.set({ genHistory: currentHistory });
+                  persistKey("genHistory", currentHistory);
                 }
                 renderTags();
                 updateHistoryUI();
@@ -848,7 +890,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         saveTags();
         if (historyModified && chrome?.storage?.local) {
-          chrome.storage.local.set({ genHistory: currentHistory });
+          persistKey("genHistory", currentHistory);
         }
         renderTags();
         updateHistoryUI();
@@ -890,7 +932,11 @@ document.addEventListener("DOMContentLoaded", () => {
       passphraseSeparator: els.passphraseSeparator?.value || "-",
       passphraseCapitalize: els.optPassphraseCapitalize?.checked !== false,
       passphraseNumber: !!els.optPassphraseNumber?.checked,
-      autoClearClipboard: els.optAutoClearClipboard ? !!els.optAutoClearClipboard.checked : true
+      autoClearClipboard: els.optAutoClearClipboard ? !!els.optAutoClearClipboard.checked : true,
+      maskPassword: els.display ? els.display.type === "password" : true,
+      vaultEnabled: els.optVaultEnabled ? els.optVaultEnabled.checked : false,
+      vaultLockClose: els.optVaultLockClose ? els.optVaultLockClose.checked : false,
+      vaultTimeoutMin: els.optVaultTimeout ? Number(els.optVaultTimeout.value) : 15
     };
   }
 
@@ -900,11 +946,370 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // --- Kho ma hoa (Argon2id + AES-256-GCM) ---
+  function vaultReady() {
+    return typeof GPVault !== "undefined" && !!GPVault.encryptWithPin && !!GPVault.reencrypt;
+  }
+
+  // Phut khong dung truoc khi tu khoa; 0 = giu phien den khi tat trinh duyet
+  function vaultTimeoutMin() {
+    if (!els.optVaultTimeout) return 15;
+    const min = parseInt(els.optVaultTimeout.value, 10);
+    return Number.isNaN(min) ? 15 : min;
+  }
+
+  // Phien luu duoi dang envelope { k: keyB64, exp: epoch ms | null }
+  function vaultSessionSet(keyB64, timeoutMin) {
+    return chrome.storage.session.set({
+      genVaultKey: { k: keyB64, exp: timeoutMin > 0 ? Date.now() + timeoutMin * 60000 : null }
+    });
+  }
+
+  // Doc envelope; van ho tiep key dang chuoi tran cua ban cu
+  function vaultSessionKey(sess) {
+    const raw = sess?.genVaultKey;
+    if (typeof raw === "string") return { k: raw, exp: null };
+    if (raw && typeof raw === "object" && raw.k) return { k: raw.k, exp: raw.exp || null };
+    return null;
+  }
+
+  function vaultSyncSettings() {
+    if (els.optVaultEnabled) els.optVaultEnabled.checked = vaultOpts.vaultEnabled;
+    if (els.optVaultLockClose) els.optVaultLockClose.checked = vaultOpts.vaultLockClose;
+    if (els.optVaultTimeout) els.optVaultTimeout.value = String(vaultOpts.vaultTimeoutMin);
+    if (els.vaultExtraSettings) els.vaultExtraSettings.hidden = !vaultOn;
+    if (els.vaultStatus) {
+      els.vaultStatus.textContent = vaultOn
+        ? "Argon2id 64MB · tự khóa sau " + (vaultOpts.vaultTimeoutMin > 0 ? vaultOpts.vaultTimeoutMin + " phút" : "khi tắt trình duyệt")
+        : "Kho chưa mã hóa";
+    }
+  }
+
+  // Dua du lieu giai mai vao cac bien dang dung cho UI
+  function vaultFill(data, keyB64) {
+    currentHistory = Array.isArray(data.genHistory) ? data.genHistory : [];
+    current2FA = Array.isArray(data.gen2FA) ? data.gen2FA : [];
+    currentCards = Array.isArray(data.genCards) ? data.genCards : [];
+    currentCookieProfiles = Array.isArray(data.genCookieProfiles) ? data.genCookieProfiles : [];
+    currentTags = (Array.isArray(data.genTags) && data.genTags.length > 0) ? data.genTags : [...DEFAULT_TAGS];
+    vaultKey = keyB64;
+    vaultData = {
+      genHistory: currentHistory,
+      gen2FA: current2FA,
+      genCards: currentCards,
+      genCookieProfiles: currentCookieProfiles,
+      genTags: currentTags
+    };
+  }
+
+  // Port toi service worker: dong popup -> SW xoa key phien neu bat tuy chon
+  function vaultPortConnect() {
+    if (vaultPort || !chrome?.runtime?.connect) return; // mot popup chi can mot port
+    try {
+      vaultPort = chrome.runtime.connect({ name: "vault-session" });
+      vaultPort.onDisconnect.addListener(() => {
+        vaultPort = null; // SW chet; lan mo popup sau tu ket noi lai
+      });
+    } catch (err) {
+      vaultPort = null;
+    }
+  }
+
+  // Gia han han tu khoa moi 20s khi con dung, SW van tu kiem tra exp moi lan doc
+  function vaultHeartbeatStart() {
+    if (vaultHeartbeat) clearInterval(vaultHeartbeat);
+    const min = vaultTimeoutMin();
+    if (min <= 0) return;
+    vaultHeartbeat = setInterval(() => {
+      if (vaultKey) vaultSessionSet(vaultKey, min).catch(() => {});
+    }, 20000);
+  }
+
+  function vaultSessionStop() {
+    if (vaultHeartbeat) {
+      clearInterval(vaultHeartbeat);
+      vaultHeartbeat = null;
+    }
+    if (vaultPort) {
+      try {
+        vaultPort.disconnect();
+      } catch (err) {
+        // port da dong san
+      }
+      vaultPort = null;
+    }
+  }
+
+  function vaultView() {
+    renderTags();
+    updateHistoryUI();
+    render2FA();
+    renderCards();
+    renderCookieProfiles();
+    start2FaTicker();
+  }
+
+  function vaultShowError(el, msg) {
+    if (!el) return;
+    el.textContent = msg;
+    el.hidden = false;
+  }
+
+  function vaultShowLock(cb) {
+    vaultDeferredCb = cb || null;
+    vaultOn = false;
+    vaultKey = null;
+    vaultData = {};
+    vaultHideError(els.vaultLockError);
+    if (els.vaultLock) els.vaultLock.hidden = false;
+    if (els.vaultPin) {
+      els.vaultPin.value = "";
+      els.vaultPin.focus();
+    }
+  }
+
+  function vaultHideError(el) {
+    if (el) el.hidden = true;
+  }
+
+  function vaultRunAfterUnlock() {
+    if (els.vaultLock) els.vaultLock.hidden = true;
+    const cb = vaultDeferredCb;
+    vaultDeferredCb = null;
+    vaultView();
+    if (cb) cb();
+  }
+
+  async function vaultUnlock() {
+    if (!vaultBlob || !vaultReady()) return;
+    const pin = (els.vaultPin?.value || "").trim();
+    if (!pin) {
+      vaultShowError(els.vaultLockError, "Nhập mã PIN");
+      return;
+    }
+    if (els.vaultUnlockBtn) els.vaultUnlockBtn.disabled = true;
+    try {
+      const { data, keyB64 } = await GPVault.unlockWithPin(vaultBlob, pin);
+      vaultFill(data, keyB64); // keyB64 la chuoi base64 cua key tho
+      await vaultSessionSet(keyB64, vaultTimeoutMin());
+      vaultOn = true;
+      vaultPortConnect();
+      vaultHeartbeatStart();
+      vaultSyncSettings();
+      vaultRunAfterUnlock();
+    } catch (err) {
+      console.warn("Mo kho that bai:", err);
+      vaultShowError(els.vaultLockError, "Mã PIN không đúng");
+      if (els.vaultPin) {
+        els.vaultPin.value = "";
+        els.vaultPin.focus();
+      }
+    } finally {
+      if (els.vaultUnlockBtn) els.vaultUnlockBtn.disabled = false;
+    }
+  }
+
+  // Ghi rac len chuoi plaintext cu truoc khi xoa, han che phuc hoi tu LevelDB
+  async function vaultShredPlaintext() {
+    const keys = ["genHistory", "gen2FA", "genCards", "genCookieProfiles", "genTags"];
+    const cur = await chrome.storage.local.get(keys);
+    const junk = {};
+    keys.forEach(k => {
+      const len = JSON.stringify(cur[k] ?? []).length;
+      if (len > 2) junk[k] = "x".repeat(len);
+    });
+    if (Object.keys(junk).length) await chrome.storage.local.set(junk);
+    await chrome.storage.local.remove(keys);
+  }
+
+  async function vaultEnable(secret) {
+    const payload = {
+      genHistory: currentHistory,
+      gen2FA: current2FA,
+      genCards: currentCards,
+      genCookieProfiles: currentCookieProfiles,
+      genTags: currentTags
+    };
+    const blob = await GPVault.encryptWithPin(payload, secret);
+    // Mot lan KDF them de lay key luu phien, tranh phai nhap lai ma
+    const keyB64 = (await GPVault.unlockWithPin(blob, secret)).keyB64;
+    await chrome.storage.local.set({ genVault: blob });
+    await vaultShredPlaintext();
+    await vaultSessionSet(keyB64, vaultTimeoutMin());
+    vaultFill(payload, keyB64); // giu key trong bo nho de cac lan luu sau ma hoa duoc
+    vaultBlob = blob;
+    vaultOn = true;
+    vaultOpts.vaultEnabled = true;
+    vaultSyncSettings();
+    saveOptions(getOptions());
+    vaultPortConnect();
+    vaultHeartbeatStart();
+    vaultView();
+    showToast("Đã bật mã hóa kho");
+  }
+
+  async function vaultDisable(pin) {
+    const { data } = await GPVault.unlockWithPin(vaultBlob, pin);
+    await chrome.storage.local.set({
+      genHistory: data.genHistory || [],
+      gen2FA: data.gen2FA || [],
+      genCards: data.genCards || [],
+      genCookieProfiles: data.genCookieProfiles || [],
+      genTags: data.genTags || []
+    });
+    await chrome.storage.local.remove("genVault");
+    await chrome.storage.session.remove("genVaultKey");
+    vaultSessionStop();
+    vaultOn = false;
+    vaultBlob = null;
+    vaultKey = null;
+    vaultData = {};
+    vaultOpts.vaultEnabled = false;
+    if (els.optVaultEnabled) els.optVaultEnabled.checked = false;
+    saveOptions(getOptions());
+    vaultSyncSettings();
+    showToast("Đã tắt mã hóa kho");
+  }
+
+  async function vaultChangePin(secret) {
+    const blob = await GPVault.encryptWithPin(vaultData, secret);
+    const keyB64 = (await GPVault.unlockWithPin(blob, secret)).keyB64;
+    await chrome.storage.local.set({ genVault: blob });
+    await vaultSessionSet(keyB64, vaultTimeoutMin()); // lam moi han tu khoa
+    vaultKey = keyB64; // key cu khong ma hoa duoc blob moi
+    vaultBlob = blob;
+    showToast("Đã đổi mã PIN");
+  }
+
+  function vaultOpenPinModal(title) {
+    if (els.modalVaultPinTitle) els.modalVaultPinTitle.textContent = title;
+    if (els.vaultPinNew) els.vaultPinNew.value = "";
+    if (els.vaultPinConfirm) els.vaultPinConfirm.value = "";
+    vaultHideError(els.vaultPinError);
+    vaultUpdatePinStrength();
+    if (els.modalVaultPin) els.modalVaultPin.hidden = false;
+    if (els.vaultPinNew) els.vaultPinNew.focus();
+  }
+
+  function vaultOpenDisableModal() {
+    if (els.vaultPinOff) els.vaultPinOff.value = "";
+    vaultHideError(els.vaultOffError);
+    if (els.modalVaultDisable) els.modalVaultDisable.hidden = false;
+    if (els.vaultPinOff) els.vaultPinOff.focus();
+  }
+
+  // Chu+so thi it nhat 8 ky tu, chi so thi it nhat 10 so
+  function vaultSecretOk(s) {
+    return s.length >= 8 && (/\D/.test(s) ? true : s.length >= 10);
+  }
+
+  function vaultSecretLabel(s) {
+    if (s.length < 8) return "Yếu";
+    if (!/\D/.test(s)) return "Trung bình";
+    if (s.length >= 12) return "Mạnh";
+    return "Trung bình";
+  }
+
+  function vaultUpdatePinStrength() {
+    if (!els.vaultPinStrength) return;
+    const s = (els.vaultPinNew?.value || "").trim();
+    const weakDigits = !/\D/.test(s) && s.length < 10;
+    if (!s) {
+      els.vaultPinStrength.hidden = true;
+      els.vaultPinStrength.textContent = "";
+      els.vaultPinStrength.classList.remove("vault-modal-error");
+      return;
+    }
+    els.vaultPinStrength.hidden = false;
+    els.vaultPinStrength.textContent = "Độ mạnh mã bảo vệ: " + vaultSecretLabel(s);
+    els.vaultPinStrength.classList.toggle("vault-modal-error", weakDigits);
+  }
+
+  async function vaultSavePin() {
+    const secret = (els.vaultPinNew?.value || "").trim();
+    const confirm = (els.vaultPinConfirm?.value || "").trim();
+    if (!vaultSecretOk(secret)) {
+      vaultShowError(els.vaultPinError, "Tối thiểu 8 ký tự (chỉ số thì 10 số)");
+      return;
+    }
+    if (secret !== confirm) {
+      vaultShowError(els.vaultPinError, "Mã PIN nhập lại không khớp");
+      return;
+    }
+    if (!vaultReady()) {
+      vaultShowError(els.vaultPinError, "Không tải được bộ mã hóa");
+      return;
+    }
+    if (!/\D/.test(secret)) {
+      vaultShowError(els.vaultPinError, "Nên dùng cả chữ và số để khó đoán hơn, đừng chỉ dùng số.");
+    } else {
+      vaultHideError(els.vaultPinError);
+    }
+    if (els.btnVaultPinSave) els.btnVaultPinSave.disabled = true;
+    try {
+      if (vaultPinMode === "change") await vaultChangePin(secret);
+      else await vaultEnable(secret);
+      if (els.modalVaultPin) els.modalVaultPin.hidden = true;
+    } catch (err) {
+      console.error("Lưu PIN thất bại:", err);
+      vaultShowError(els.vaultPinError, "Không lưu được mã PIN");
+    } finally {
+      if (els.btnVaultPinSave) els.btnVaultPinSave.disabled = false;
+    }
+  }
+
+  async function vaultDisableConfirm() {
+    const pin = (els.vaultPinOff?.value || "").trim();
+    if (!pin) {
+      vaultShowError(els.vaultOffError, "Nhập mã PIN");
+      return;
+    }
+    if (els.btnVaultOffConfirm) els.btnVaultOffConfirm.disabled = true;
+    try {
+      await vaultDisable(pin);
+      if (els.modalVaultDisable) els.modalVaultDisable.hidden = true;
+    } catch (err) {
+      console.warn("Tắt kho thất bại:", err);
+      vaultShowError(els.vaultOffError, "Mã PIN không đúng");
+    } finally {
+      if (els.btnVaultOffConfirm) els.btnVaultOffConfirm.disabled = false;
+    }
+  }
+
+  // Ghi 1 khoa nhay cam: kho dang bat thi ma hoa lai ca blob, nguoc lai ghi thang nhu cu
+  async function persist(key, value) {
+    if (!vaultOn || !vaultKey || !vaultBlob) {
+      chrome.storage.local.set({ [key]: value });
+      return;
+    }
+    vaultData[key] = value;
+    const blob = await GPVault.reencrypt(vaultData, vaultKey, {
+      salt: vaultBlob.salt,
+      t: vaultBlob.t,
+      m: vaultBlob.m,
+      p: vaultBlob.p
+    });
+    vaultBlob = blob;
+    await chrome.storage.local.set({ genVault: blob });
+  }
+
+  // Bao loi thanh toast de khong im lang mat du lieu
+  function persistKey(key, value) {
+    persist(key, value).catch(err => {
+      console.error("Lưu " + key + " thất bại:", err);
+      showToast("Lỗi khi lưu dữ liệu vào kho mã hóa!");
+    });
+  }
+
   function loadOptions(cb) {
     if (chrome?.storage?.local) {
-      chrome.storage.local.get(["genOptions", "genHistory", "genTags", "gen2FA", "genCards", "genCookieProfiles"], (res) => {
+      chrome.storage.local.get(["genOptions", "genHistory", "genTags", "gen2FA", "genCards", "genCookieProfiles", "genVault"], (res) => {
         if (res.genOptions) {
           const o = res.genOptions;
+          vaultOpts.vaultEnabled = o.vaultEnabled === true;
+          vaultOpts.vaultLockClose = o.vaultLockClose !== false; // mac dinh: tu khoa khi dong popup
+          vaultOpts.vaultTimeoutMin = Number(o.vaultTimeoutMin ?? 15);
+          if (els.optVaultTimeout) els.optVaultTimeout.value = String(o.vaultTimeoutMin ?? 15);
           els.lengthRange.value = o.length || 16;
           els.lengthVal.textContent = o.length || 16;
           els.optUpper.checked = o.upper !== false;
@@ -919,6 +1324,12 @@ document.addEventListener("DOMContentLoaded", () => {
           }
           els.minNumbers.value = o.minNumbers ?? 1;
           els.minSpecial.value = o.minSpecial ?? 1;
+
+          // Che mat khau o o output: mac dinh bat
+          maskHistoryPass = o.maskPassword !== false;
+          isMasked = maskHistoryPass;
+          if (els.display) els.display.type = maskHistoryPass ? "password" : "text";
+          if (els.toggleMask) els.toggleMask.title = isMasked ? "Hiện mật khẩu" : "Ẩn mật khẩu";
 
           if (o.generatorMode === "passphrase") {
             currentGenMode = "passphrase";
@@ -941,6 +1352,41 @@ document.addEventListener("DOMContentLoaded", () => {
             els.optPassphraseNumber.checked = o.passphraseNumber;
           }
         }
+
+        // Kho ma hoa dang bat: chi doc blob, khoa nhay cam phai giai mai bang ma bao ve
+        if (vaultOpts.vaultEnabled && res.genVault && vaultReady()) {
+          vaultBlob = res.genVault;
+          vaultOn = false;
+          vaultKey = null;
+          vaultData = {};
+          vaultSyncSettings();
+          chrome.storage.session.get("genVaultKey", (sess) => {
+            const entry = vaultSessionKey(sess);
+            const expired = entry && entry.exp && Date.now() > entry.exp;
+            if (!entry || !entry.k || expired) {
+              if (expired) chrome.storage.session.remove("genVaultKey"); // phien qua han tu dong
+              vaultShowLock(cb);
+              return;
+            }
+            GPVault.decryptBlob(res.genVault, entry.k)
+              .then(data => {
+                vaultFill(data, entry.k);
+                vaultOn = true;
+                vaultSessionSet(entry.k, vaultTimeoutMin()).catch(() => {});
+                vaultPortConnect();
+                vaultHeartbeatStart();
+                vaultSyncSettings();
+                vaultRunAfterUnlock();
+              })
+              .catch(err => {
+                console.warn("Phien kho het han:", err);
+                chrome.storage.session.remove("genVaultKey"); // key cu, khong giai mai duoc blob
+                vaultShowLock(cb);
+              });
+          });
+          return;
+        }
+
         if (Array.isArray(res.genTags) && res.genTags.length > 0) {
           currentTags = res.genTags;
         } else {
@@ -958,6 +1404,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (Array.isArray(res.genCookieProfiles)) {
           currentCookieProfiles = res.genCookieProfiles;
         }
+        vaultSyncSettings();
         renderTags();
         updateHistoryUI();
         render2FA();
@@ -1011,7 +1458,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateHistoryUI();
         renderTagFilterBar();
         if (chrome?.storage?.local) {
-          chrome.storage.local.set({ genHistory: currentHistory });
+          persistKey("genHistory", currentHistory);
         }
       }
       return; // Skip duplicate consecutive saves
@@ -1035,7 +1482,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateHistoryUI();
     renderTagFilterBar();
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ genHistory: currentHistory });
+      persistKey("genHistory", currentHistory);
     }
   }
 
@@ -1160,7 +1607,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             if (changed) {
               if (chrome?.storage?.local) {
-                chrome.storage.local.set({ genHistory: currentHistory });
+                persistKey("genHistory", currentHistory);
               }
               renderTagFilterBar();
               showToast("Đã cập nhật!");
@@ -1222,7 +1669,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const passEl = document.createElement("span");
       passEl.className = "history-pass";
-      passEl.textContent = item.password;
+      // Mat khau an thanh cham, bam mat de hien lai tung dong
+      passEl.textContent = (maskHistoryPass && !unmaskedHistoryIds.has(item.id))
+        ? "•".repeat(Math.min((item.password || "").length, 12))
+        : item.password;
       passEl.title = "Bấm để sao chép";
       passEl.addEventListener("click", () => {
         navigator.clipboard.writeText(item.password);
@@ -1276,11 +1726,23 @@ document.addEventListener("DOMContentLoaded", () => {
         updateHistoryUI();
         renderTagFilterBar();
         if (chrome?.storage?.local) {
-          chrome.storage.local.set({ genHistory: currentHistory });
+          persistKey("genHistory", currentHistory);
         }
       });
 
+      const eyeBtn = document.createElement("button");
+      eyeBtn.className = "icon-btn";
+      eyeBtn.title = unmaskedHistoryIds.has(item.id) ? "Ẩn mật khẩu" : "Hiện mật khẩu";
+      eyeBtn.type = "button";
+      eyeBtn.innerHTML = unmaskedHistoryIds.has(item.id) ? EYE_OFF_SVG : EYE_ON_SVG;
+      eyeBtn.addEventListener("click", () => {
+        if (unmaskedHistoryIds.has(item.id)) unmaskedHistoryIds.delete(item.id);
+        else unmaskedHistoryIds.add(item.id);
+        updateHistoryUI();
+      });
+
       actions.appendChild(copyBtn);
+      actions.appendChild(eyeBtn);
       actions.appendChild(delBtn);
 
       row.appendChild(details);
@@ -1403,7 +1865,7 @@ document.addEventListener("DOMContentLoaded", () => {
       delBtn.addEventListener("click", () => {
         current2FA = current2FA.filter(i => i.id !== item.id);
         if (chrome?.storage?.local) {
-          chrome.storage.local.set({ gen2FA: current2FA });
+          persistKey("gen2FA", current2FA);
         }
         render2FA();
         showToast(`Đã xóa mã 2FA "${item.name}"!`);
@@ -1637,7 +2099,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ genHistory: currentHistory });
+      persistKey("genHistory", currentHistory);
     }
 
     updateHistoryUI();
@@ -1868,6 +2330,130 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast(els.optAutoClearClipboard.checked ? "Đã bật tự động xóa clipboard sau 30s!" : "Đã tắt tự động xóa clipboard!");
   });
 
+  // --- Vault listeners ---
+  if (els.optVaultEnabled) {
+    els.optVaultEnabled.addEventListener("change", () => {
+      if (els.optVaultEnabled.checked) {
+        vaultPinMode = "set";
+        vaultOpenPinModal("Đặt mã PIN bảo vệ kho");
+      } else if (vaultOn) {
+        vaultOpenDisableModal();
+      } else {
+        els.optVaultEnabled.checked = false;
+      }
+    });
+  }
+
+  if (els.optVaultLockClose) {
+    els.optVaultLockClose.addEventListener("change", () => {
+      vaultOpts.vaultLockClose = els.optVaultLockClose.checked;
+      saveOptions(getOptions());
+    });
+  }
+
+  if (els.optVaultTimeout) {
+    els.optVaultTimeout.addEventListener("change", () => {
+      vaultOpts.vaultTimeoutMin = vaultTimeoutMin();
+      saveOptions(getOptions());
+      vaultSyncSettings();
+      // Ap dung ngay han moi thay vi cho nhip tim 20s ke tiep
+      if (vaultOn && vaultKey) vaultSessionSet(vaultKey, vaultOpts.vaultTimeoutMin).catch(() => {});
+      vaultHeartbeatStart();
+    });
+  }
+
+  if (els.vaultPinNew) {
+    els.vaultPinNew.addEventListener("input", vaultUpdatePinStrength);
+  }
+
+  if (els.btnVaultChangePin) {
+    els.btnVaultChangePin.addEventListener("click", () => {
+      vaultPinMode = "change";
+      vaultOpenPinModal("Đổi mã PIN");
+    });
+  }
+
+  if (els.vaultUnlockBtn) {
+    els.vaultUnlockBtn.addEventListener("click", () => {
+      vaultUnlock();
+    });
+  }
+
+  if (els.vaultPin) {
+    els.vaultPin.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") vaultUnlock();
+    });
+  }
+
+  if (els.btnVaultPinSave) {
+    els.btnVaultPinSave.addEventListener("click", () => {
+      vaultSavePin();
+    });
+  }
+
+  if (els.btnVaultPinCancel) {
+    els.btnVaultPinCancel.addEventListener("click", () => {
+      if (els.modalVaultPin) els.modalVaultPin.hidden = true;
+      if (els.optVaultEnabled && !vaultOn) els.optVaultEnabled.checked = false;
+    });
+  }
+
+  if (els.btnCloseVaultPin) {
+    els.btnCloseVaultPin.addEventListener("click", () => {
+      if (els.modalVaultPin) els.modalVaultPin.hidden = true;
+      if (els.optVaultEnabled && !vaultOn) els.optVaultEnabled.checked = false;
+    });
+  }
+
+  if (els.btnVaultOffConfirm) {
+    els.btnVaultOffConfirm.addEventListener("click", () => {
+      vaultDisableConfirm();
+    });
+  }
+
+  if (els.btnVaultOffCancel) {
+    els.btnVaultOffCancel.addEventListener("click", () => {
+      if (els.modalVaultDisable) els.modalVaultDisable.hidden = true;
+      if (els.optVaultEnabled) els.optVaultEnabled.checked = vaultOn;
+    });
+  }
+
+  if (els.btnCloseVaultOff) {
+    els.btnCloseVaultOff.addEventListener("click", () => {
+      if (els.modalVaultDisable) els.modalVaultDisable.hidden = true;
+      if (els.optVaultEnabled) els.optVaultEnabled.checked = vaultOn;
+    });
+  }
+
+  if (els.modalVaultPin) {
+    els.modalVaultPin.addEventListener("click", (e) => {
+      if (e.target === els.modalVaultPin) {
+        els.modalVaultPin.hidden = true;
+        if (els.optVaultEnabled && !vaultOn) els.optVaultEnabled.checked = false;
+      }
+    });
+  }
+
+  if (els.modalVaultDisable) {
+    els.modalVaultDisable.addEventListener("click", (e) => {
+      if (e.target === els.modalVaultDisable) {
+        els.modalVaultDisable.hidden = true;
+        if (els.optVaultEnabled) els.optVaultEnabled.checked = vaultOn;
+      }
+    });
+  }
+
+  // Dong popup la khoa lai neu nguoi dung bat tuy chon nay
+  window.addEventListener("pagehide", () => {
+    vaultSessionStop();
+    if (!vaultOn) return;
+    if (!els.optVaultLockClose?.checked) return; // khong tu khoa thi giu phien
+    if (chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ action: "vault_lock" }, () => void chrome.runtime.lastError);
+    }
+    if (chrome?.storage?.session) chrome.storage.session.remove("genVaultKey");
+  });
+
   els.passwordName.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       els.copy.click();
@@ -2078,6 +2664,7 @@ document.addEventListener("DOMContentLoaded", () => {
     isMasked = !isMasked;
     els.display.type = isMasked ? "password" : "text";
     els.toggleMask.title = isMasked ? "Hiện mật khẩu" : "Ẩn mật khẩu";
+    saveOptions(getOptions());
   });
 
   // Modal Tag Management
@@ -2104,6 +2691,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       if (els.modalImportCsv && !els.modalImportCsv.hidden) {
         closeImportModal();
+      }
+      if (els.modalVaultPin && !els.modalVaultPin.hidden) {
+        els.modalVaultPin.hidden = true;
+        if (els.optVaultEnabled && !vaultOn) els.optVaultEnabled.checked = false;
+      }
+      if (els.modalVaultDisable && !els.modalVaultDisable.hidden) {
+        els.modalVaultDisable.hidden = true;
+        if (els.optVaultEnabled) els.optVaultEnabled.checked = vaultOn;
       }
     }
   });
@@ -2205,7 +2800,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     current2FA.unshift(newItem);
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ gen2FA: current2FA });
+      persistKey("gen2FA", current2FA);
     }
 
     els.cardAdd2Fa.hidden = true;
@@ -2280,7 +2875,7 @@ document.addEventListener("DOMContentLoaded", () => {
     updateHistoryUI();
     renderTagFilterBar();
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ genHistory: [] });
+      persistKey("genHistory", []);
     }
     showToast("Đã xóa toàn bộ lịch sử.");
   });
@@ -2288,7 +2883,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Payment Cards Management ---
   function saveCards() {
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ genCards: currentCards });
+      persistKey("genCards", currentCards);
     }
   }
 
@@ -2785,7 +3380,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function saveCookieProfiles() {
     if (chrome?.storage?.local) {
-      chrome.storage.local.set({ genCookieProfiles: currentCookieProfiles });
+      persistKey("genCookieProfiles", currentCookieProfiles);
     }
   }
 
@@ -3297,17 +3892,53 @@ document.addEventListener("DOMContentLoaded", () => {
   if (chrome?.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === "local") {
+        // Kho dang bat: chi theo doi blob giai mai, khong doc khoa thang
+        if (vaultOn && vaultKey) {
+          if (!changes.genVault) return;
+          GPVault.decryptBlob(changes.genVault.newValue, vaultKey)
+            .then(data => {
+              if (Array.isArray(data.genTags) && data.genTags.length > 0) {
+                currentTags = data.genTags;
+                vaultData.genTags = data.genTags;
+              }
+              if (Array.isArray(data.genHistory)) {
+                currentHistory = data.genHistory;
+                vaultData.genHistory = data.genHistory;
+              }
+              if (Array.isArray(data.gen2FA)) {
+                current2FA = data.gen2FA;
+                vaultData.gen2FA = data.gen2FA;
+              }
+              if (Array.isArray(data.genCards)) {
+                currentCards = data.genCards;
+                vaultData.genCards = data.genCards;
+              }
+              if (Array.isArray(data.genCookieProfiles)) {
+                currentCookieProfiles = data.genCookieProfiles;
+                vaultData.genCookieProfiles = data.genCookieProfiles;
+              }
+              renderTags();
+              updateHistoryUI();
+              render2FA();
+              renderCards();
+              renderCookieProfiles();
+            })
+            .catch(() => {
+              // blob khac khoa (doi PIN o dau do): bo qua
+            });
+          return;
+        }
         if (changes.genHistory) {
-          currentHistory = changes.genHistory.newValue || [];
+          currentHistory = Array.isArray(changes.genHistory.newValue) ? changes.genHistory.newValue : [];
           updateHistoryUI();
           renderTagFilterBar();
         }
         if (changes.genCards) {
-          currentCards = changes.genCards.newValue || [];
+          currentCards = Array.isArray(changes.genCards.newValue) ? changes.genCards.newValue : [];
           renderCards();
         }
         if (changes.genCookieProfiles) {
-          currentCookieProfiles = changes.genCookieProfiles.newValue || [];
+          currentCookieProfiles = Array.isArray(changes.genCookieProfiles.newValue) ? changes.genCookieProfiles.newValue : [];
           renderCookieProfiles();
         }
       }

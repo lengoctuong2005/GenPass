@@ -33,6 +33,23 @@
       </nav>
     </header>
 
+    <!-- Vault lock screen -->
+    <div id="vault-lock" class="vault-lock" hidden>
+      <div class="vault-lock-inner">
+        <svg class="vault-lock-icon" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.59 2.04-1.46 2.56L14 15h-4v-2.44A2.99 2.99 0 0 1 9 10c0-1.66 1.34-3 3-3z"/>
+        </svg>
+        <h2 class="vault-lock-title">Kho đã khóa</h2>
+        <p class="vault-lock-sub">Nhập mã PIN hoặc mật khẩu để mở kho</p>
+        <div class="vault-lock-form">
+          <input type="password" id="vault-pin" autocomplete="off" maxlength="64" placeholder="Mã PIN hoặc mật khẩu" aria-label="Mã PIN hoặc mật khẩu">
+          <button type="button" id="vault-unlock-btn" class="btn-primary">Mở khóa</button>
+        </div>
+        <p class="text-muted" style="font-size: 11px; margin: 0;">Tối thiểu 8 ký tự. Nếu chỉ dùng số thì tối thiểu 10 số.</p>
+        <p id="vault-lock-error" class="vault-lock-error" hidden></p>
+      </div>
+    </div>
+
     <!-- Update Banner -->
     <div id="update-banner" class="update-banner" hidden style="display: none;">
       <div class="update-info">
@@ -235,6 +252,36 @@
           <span class="checkbox-custom"></span>
           <span class="toggle-label">Tự động xóa clipboard sau 30 giây</span>
         </label>
+
+        <div class="vault-settings-divider"><span>BẢO MẬT KHO</span></div>
+        <p class="text-muted" style="font-size: 11px; margin: 0 0 4px;">Kho mã hóa chống lấy cắp dữ liệu khi trình duyệt đã tắt. Không chống malware hoặc extension độc hại chạy khi kho đang mở.</p>
+
+        <label class="toggle-item full-width">
+          <input type="checkbox" id="opt-vault-enabled">
+          <span class="checkbox-custom"></span>
+          <span class="toggle-label">Bảo vệ kho bằng mã bảo vệ (mã hóa AES-256)</span>
+        </label>
+
+        <div id="vault-extra-settings" hidden>
+          <label class="toggle-item full-width" style="margin-top: 6px;">
+            <input type="checkbox" id="opt-vault-lock-close">
+            <span class="checkbox-custom"></span>
+            <span class="toggle-label">Tự khóa ngay khi đóng popup</span>
+          </label>
+          <div class="vault-timeout-row">
+            <label for="opt-vault-timeout">Tự khóa sau thời gian không dùng</label>
+            <select id="opt-vault-timeout" class="select-input">
+              <option value="5">5 phút</option>
+              <option value="15" selected>15 phút</option>
+              <option value="30">30 phút</option>
+              <option value="0">Đến khi tắt trình duyệt</option>
+            </select>
+          </div>
+          <div class="vault-status-row">
+            <span id="vault-status" class="text-muted"></span>
+            <button id="btn-vault-change-pin" class="btn-text" type="button">Đổi mã PIN</button>
+          </div>
+        </div>
       </section>
     </main>
 
@@ -464,6 +511,47 @@
       </div>
     </div>
 
+    <!-- Modal đặt / đổi mã PIN vault -->
+    <div id="modal-vault-pin" class="modal-backdrop" hidden>
+      <div class="modal-container">
+        <div class="modal-header">
+          <span id="modal-vault-pin-title" class="modal-title">Đặt mã PIN</span>
+          <button id="btn-close-vault-pin" class="icon-btn-small" type="button" title="Đóng">&times;</button>
+        </div>
+        <div class="modal-body" style="gap: 12px; display: flex; flex-direction: column;">
+          <input type="password" id="vault-pin-new" maxlength="64" placeholder="Mã bảo vệ mới (tối thiểu 8 ký tự)" autocomplete="off">
+          <input type="password" id="vault-pin-confirm" maxlength="64" placeholder="Mã bảo vệ mới (tối thiểu 8 ký tự)" autocomplete="off">
+          <p class="text-muted" style="font-size: 11px; margin: 0;">Tối thiểu 8 ký tự. Nếu chỉ dùng số thì tối thiểu 10 số.</p>
+          <p id="vault-pin-strength" class="text-muted vault-pin-strength" hidden></p>
+          <p id="vault-pin-error" class="text-muted vault-modal-error" hidden></p>
+          <div class="add-2fa-actions">
+            <button id="btn-vault-pin-cancel" class="btn-text" type="button">Hủy</button>
+            <button id="btn-vault-pin-save" class="btn-primary" type="button">Lưu mã PIN</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal tắt mã hóa vault -->
+    <div id="modal-vault-disable" class="modal-backdrop" hidden>
+      <div class="modal-container">
+        <div class="modal-header">
+          <span class="modal-title">Tắt mã hóa kho</span>
+          <button id="btn-close-vault-off" class="icon-btn-small" type="button" title="Đóng">&times;</button>
+        </div>
+        <div class="modal-body" style="gap: 12px; display: flex; flex-direction: column;">
+          <p class="text-muted" style="font-size: 12px;">Nhập mã bảo vệ để giải mã và trở về chế độ lưu thường.</p>
+          <input type="password" id="vault-pin-off" maxlength="64" placeholder="Mã PIN hoặc mật khẩu" autocomplete="off">
+          <p class="text-muted" style="font-size: 11px; margin: 0;">Tối thiểu 8 ký tự. Nếu chỉ dùng số thì tối thiểu 10 số.</p>
+          <p id="vault-off-error" class="text-muted vault-modal-error" hidden></p>
+          <div class="add-2fa-actions">
+            <button id="btn-vault-off-cancel" class="btn-text" type="button">Hủy</button>
+            <button id="btn-vault-off-confirm" class="btn-primary" type="button">Giải mã & tắt</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Nhập CSV -->
     <div id="modal-import-csv" class="modal-backdrop" hidden>
       <div class="modal-container" style="max-width: 340px;">
@@ -503,6 +591,8 @@
     <div id="toast" class="toast">Đã sao chép vào bộ nhớ tạm!</div>
   </div>
 
+  <script src="vendor/hash-wasm.umd.js"></script>
+  <script src="vault.js"></script>
   <script src="jsqr.js"></script>
   <script src="wordlist.js"></script>
   <script src="popup.js"></script>

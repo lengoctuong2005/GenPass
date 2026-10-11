@@ -132,6 +132,9 @@ GenPass/
 ├── content.css         # Định kiểu modal thông báo và badge trên trang web
 ├── jsqr.js             # Thư viện giải mã QR thuần JS offline (chuẩn CSP)
 ├── wordlist.js         # Từ điển Diceware EFF chuẩn 1,296 từ cho Passphrase
+├── vault.js            # Lõi mã hóa kho: Argon2id -> AES-256-GCM (chỉ chạy ở popup/service worker)
+├── vendor/hash-wasm.umd.js  # Thư viện Argon2id WebAssembly (MIT, đóng gói sẵn, chạy offline)
+├── tests/              # Kiểm thử crypto + tích hợp popup/service worker (node tests/*.cjs)
 ├── icons/              # Biểu tượng tiện ích (16px, 48px, 128px)
 ├── .gitignore          # Cấu hình bỏ qua tệp hệ thống khi quản lý phiên bản
 └── README.md           # Hướng dẫn sử dụng chi tiết
@@ -152,6 +155,38 @@ GenPass chỉ yêu cầu các quyền hạn cần thiết tối thiểu theo chu
 **Cam kết**:
 - Mã nguồn mở 100%, không chứa mã độc, không chèn quảng cáo, không gắn dịch vụ theo dõi hành vi.
 - Toàn bộ dữ liệu mật khẩu và khóa bí mật 2FA đều nằm nguyên vẹn trên thiết bị của bạn.
+
+---
+
+## Bảo mật & mã hóa
+
+### Thuật toán
+- Suy diễn khóa bằng Argon2id: `t=3`, `m=64 MiB`, `p=4`, đầu ra 32 byte. Cài đặt WebAssembly từ `hash-wasm` (MIT), đóng gói sẵn trong `vendor/`.
+- Mật khẩu, khóa 2FA, thẻ thanh toán và ghi chú được mã hóa AES-256-GCM trong một blob duy nhất (`genVault`) thay vì lưu rời thành nhiều khóa.
+- Mỗi lần ghi sinh IV ngẫu nhiên mới, salt 16 byte ngẫu nhiên, auth tag 128 bit. AAD gắn với phiên bản blob để phát hiện thay đổi cấu trúc.
+
+### Mã bảo vệ kho
+- Tối thiểu 8 ký tự; nếu chỉ dùng số thì tối thiểu 10 số.
+- Có cảnh báo độ mạnh ngay tại ô nhập.
+
+### Tự khóa
+- Mặc định khóa khi đóng popup. Service worker phát hiện qua cổng kết nối (`runtime.onConnect`), không dựa vào tác vụ bất đồng bộ của popup vốn bị hủy khi tiến trình popup dừng.
+- Tự khóa thêm sau 5, 15 hoặc 30 phút không dùng.
+- Khóa phiên nằm trong `chrome.storage.session`, mất khi tắt trình duyệt. Hết hạn phiên, thao tác đọc/ghi trả về trạng thái đã khóa và yêu cầu nhập lại mã.
+
+### Phạm vi bảo mật
+- Chống việc lấy cắp file profile hoặc bản sao lưu khi trình duyệt đang tắt.
+- KHÔNG chống malware chạy cùng quyền người dùng lúc kho đang mở, và không chống tiện ích mở rộng độc hại khác (có thể đọc `storage.local` đang mở hoặc hook luồng tự động điền).
+
+### Tự động điền
+- Chỉ điền khi host của mục đã lưu khớp host của trang đang mở (không tính tiền tố `www.`) và ô nhập đang hiện hình.
+- Mã OTP chỉ điền ở top frame, tránh iframe khác origin đọc được mã.
+
+### Ghi đè dữ liệu cũ (LevelDB)
+- Khi bật mã hóa, khóa/giá trị dạng văn bản trước đó được ghi đè bằng dữ liệu rác rồi mới xóa để giảm khả năng phục hồi từ ổ đĩa. Biện pháp này giảm rủi ro, không đảm bảo tuyệt đối.
+
+### Ghi chú nâng cấp từ vault v1
+- Vault v1 (PBKDF2) chỉ tồn tại trong quá trình phát triển. Blob v1 cũ bị từ chối với lỗi `GPVAULT_BAD_BLOB`. Đây là hành vi có chủ đích: dữ liệu cũ cần mở kho và lưu lại bằng vault v2.
 
 ---
 

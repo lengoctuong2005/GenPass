@@ -1,5 +1,17 @@
 // GenPass Background Service Worker - Hierarchical Context Menus & Security Engine
 try {
+  importScripts("vendor/hash-wasm.umd.js"); // Argon2id wasm phai nap truoc vault.js
+} catch (e) {
+  console.warn("Failed to import hash-wasm:", e);
+}
+
+try {
+  importScripts("vault.js");
+} catch (e) {
+  console.warn("Failed to import vault.js:", e);
+}
+
+try {
   importScripts("jsqr.js");
 } catch (e) {
   console.warn("Failed to import jsqr.js:", e);
@@ -253,35 +265,112 @@ async function decodeQrFromUrl(url) {
   return null;
 }
 
+// --- Vault helpers: doc/ghi 5 khoa nhay cam qua blob AES-GCM ---
+const VAULT_KEYS = ["genHistory", "gen2FA", "genCards", "genCookieProfiles", "genTags"];
+
+function vaultReady() {
+  return typeof GPVault !== "undefined" && !!GPVault.encryptWithPin;
+}
+
+// { vault, key, data, locked, plain }
+async function vaultContext() {
+  const plain = await chrome.storage.local.get(["genVault"].concat(VAULT_KEYS, ["genOptions"]));
+  const ctx = { plain: plain, vault: null, key: null, data: null, locked: false };
+  if (!plain.genVault || !vaultReady() || plain.genOptions?.vaultEnabled !== true) return ctx;
+
+  ctx.vault = plain.genVault;
+  const sess = await chrome.storage.session.get("genVaultKey");
+  const entry = sess.genVaultKey;
+  if (!entry) {
+    ctx.locked = true;
+    return ctx;
+  }
+  // Envelope moi { k: keyB64, exp }; van chua dang bare string cua ban cu
+  const keyB64 = typeof entry === "string" ? entry : entry && entry.k;
+  // key phiên het han -> xoa va bat nhap lai ma bao ve
+  if (entry && entry.exp && Date.now() > entry.exp) {
+    await chrome.storage.session.remove("genVaultKey");
+    ctx.locked = true;
+    return ctx;
+  }
+  try {
+    // decryptBlob nhan thang chuoi b64, khong con importKey
+    ctx.key = keyB64;
+    ctx.data = await GPVault.decryptBlob(plain.genVault, keyB64);
+  } catch (err) {
+    console.warn("Kho khong giai mai duoc (doi PIN?):", err);
+    ctx.locked = true;
+  }
+  return ctx;
+}
+
+// Vault bat: giai mai + luu lai blob. Vault tat: ghi thang khoa nhu cu
+async function vaultMutate(partial) {
+  const ctx = await vaultContext();
+  if (!ctx.vault) {
+    await chrome.storage.local.set(partial);
+    return;
+  }
+  if (ctx.locked || !ctx.key || !ctx.data) throw new Error("VAULT_LOCKED");
+  Object.assign(ctx.data, partial);
+  // Ma hoa lai, giu nguyen salt/tham so KDF cua blob cu qua reencrypt
+  const blob = await GPVault.reencrypt(ctx.data, ctx.key, {
+    salt: ctx.vault.salt,
+    t: ctx.vault.t,
+    m: ctx.vault.m,
+    p: ctx.vault.p
+  });
+  await chrome.storage.local.set({ genVault: blob });
+}
+
+// Doc cac khoa can thiet: khoa vault lay tu blob, khoa con lai lay thang storage
+async function vaultRead(keys) {
+  const list = Array.isArray(keys) ? keys : [];
+  const ctx = await vaultContext();
+  if (ctx.locked) return { __locked: true };
+  const out = {};
+  list.forEach(k => {
+    if (ctx.vault && ctx.data && Object.prototype.hasOwnProperty.call(ctx.data, k)) out[k] = ctx.data[k];
+    else if (Object.prototype.hasOwnProperty.call(ctx.plain, k)) out[k] = ctx.plain[k];
+  });
+  return out;
+}
+
 // Helper: Save 2FA with Deduplication Guard
-function save2FaCredential(name, account, secret, tabId) {
-  chrome.storage.local.get(["gen2FA"], (res) => {
-    const list = Array.isArray(res.gen2FA) ? res.gen2FA : [];
-    const cleanSecret = secret.trim().replace(/\s+/g, "").toUpperCase();
-    const existingIndex = list.findIndex(item => item.secret && item.secret.toUpperCase() === cleanSecret);
-
-    const newItem = {
-      id: existingIndex >= 0 ? list[existingIndex].id : Date.now().toString(),
-      name: name || (existingIndex >= 0 ? list[existingIndex].name : "2FA Account"),
-      account: account || (existingIndex >= 0 ? list[existingIndex].account : ""),
-      secret: cleanSecret,
-      createdAt: new Date().toLocaleTimeString("vi-VN")
-    };
-
-    if (existingIndex >= 0) {
-      list[existingIndex] = newItem;
-    } else {
-      list.unshift(newItem);
-    }
-
-    chrome.storage.local.set({ gen2FA: list }, () => {
-      chrome.tabs.sendMessage(tabId, {
-        action: "show_toast",
-        message: existingIndex >= 0
-          ? `GenPass: Đã cập nhật mã 2FA "${newItem.name}"!`
-          : `GenPass: Đã lưu mã 2FA "${newItem.name}"!`
-      });
+async function save2FaCredential(name, account, secret, tabId) {
+  const res = await vaultRead(["gen2FA"]);
+  if (res.__locked) {
+    console.error("GenPass: kho dang khoa, mo popup va nhap PIN de luu ma 2FA");
+    chrome.tabs.sendMessage(tabId, {
+      action: "show_toast",
+      message: "GenPass: Kho đang khóa, mở popup và nhập PIN để lưu mã 2FA!"
     });
+    return;
+  }
+  const list = Array.isArray(res.gen2FA) ? res.gen2FA : [];
+  const cleanSecret = secret.trim().replace(/\s+/g, "").toUpperCase();
+  const existingIndex = list.findIndex(item => item.secret && item.secret.toUpperCase() === cleanSecret);
+
+  const newItem = {
+    id: existingIndex >= 0 ? list[existingIndex].id : Date.now().toString(),
+    name: name || (existingIndex >= 0 ? list[existingIndex].name : "2FA Account"),
+    account: account || (existingIndex >= 0 ? list[existingIndex].account : ""),
+    secret: cleanSecret,
+    createdAt: new Date().toLocaleTimeString("vi-VN")
+  };
+
+  if (existingIndex >= 0) {
+    list[existingIndex] = newItem;
+  } else {
+    list.unshift(newItem);
+  }
+
+  await vaultMutate({ gen2FA: list });
+  chrome.tabs.sendMessage(tabId, {
+    action: "show_toast",
+    message: existingIndex >= 0
+      ? `GenPass: Đã cập nhật mã 2FA "${newItem.name}"!`
+      : `GenPass: Đã lưu mã 2FA "${newItem.name}"!`
   });
 }
 
@@ -422,42 +511,50 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 
   if (info.menuItemId === "fill_latest_2fa") {
-    chrome.storage.local.get(["gen2FA"], async (res) => {
-      const list = Array.isArray(res.gen2FA) ? res.gen2FA : [];
-      if (list.length === 0) {
-        chrome.tabs.sendMessage(tab.id, {
-          action: "show_toast",
-          message: "GenPass: Bạn chưa lưu mã 2FA nào!"
-        });
-        return;
-      }
-
-      // Find matching item for domain or use first item
-      let targetItem = list[0];
-      if (tab.url) {
-        try {
-          const domain = new URL(tab.url).hostname.replace(/^www\./i, "").toLowerCase();
-          const match = list.find(item => item.name && (item.name.toLowerCase().includes(domain) || domain.includes(item.name.toLowerCase())));
-          if (match) targetItem = match;
-        } catch (err) {
-          console.warn("Domain matching for 2FA failed:", err);
-        }
-      }
-
-      const otp = await computeTotpCode(targetItem.secret);
-      if (!otp) {
-        chrome.tabs.sendMessage(tab.id, {
-          action: "show_toast",
-          message: "GenPass: Khóa bí mật 2FA không hợp lệ!"
-        });
-        return;
-      }
-
+    // Khong co quyen notifications trong manifest, gioi han o console.error khien kho bi khoa
+    const gpRes = await vaultRead(["gen2FA"]);
+    if (gpRes.__locked) {
+      console.error("GenPass: kho dang khoa, mo popup va nhap PIN de dien ma 2FA");
       chrome.tabs.sendMessage(tab.id, {
-        action: "fill_2fa",
-        code: otp,
-        accountName: targetItem.name
+        action: "show_toast",
+        message: "GenPass: Kho đang khóa, mở popup và nhập PIN để điền mã 2FA!"
       });
+      return;
+    }
+    const list = Array.isArray(gpRes.gen2FA) ? gpRes.gen2FA : [];
+    if (list.length === 0) {
+      chrome.tabs.sendMessage(tab.id, {
+        action: "show_toast",
+        message: "GenPass: Bạn chưa lưu mã 2FA nào!"
+      });
+      return;
+    }
+
+    // Find matching item for domain or use first item
+    let targetItem = list[0];
+    if (tab.url) {
+      try {
+        const domain = new URL(tab.url).hostname.replace(/^www\./i, "").toLowerCase();
+        const match = list.find(item => item.name && (item.name.toLowerCase().includes(domain) || domain.includes(item.name.toLowerCase())));
+        if (match) targetItem = match;
+      } catch (err) {
+        console.warn("Domain matching for 2FA failed:", err);
+      }
+    }
+
+    const otp = await computeTotpCode(targetItem.secret);
+    if (!otp) {
+      chrome.tabs.sendMessage(tab.id, {
+        action: "show_toast",
+        message: "GenPass: Khóa bí mật 2FA không hợp lệ!"
+      });
+      return;
+    }
+
+    chrome.tabs.sendMessage(tab.id, {
+      action: "fill_2fa",
+      code: otp,
+      accountName: targetItem.name
     });
   }
 });
@@ -490,7 +587,9 @@ function processQrResult(qrText, tabId) {
     return;
   }
 
-  save2FaCredential(name, account, secret, tabId);
+  save2FaCredential(name, account, secret, tabId).catch(err => {
+    console.error("Lưu 2FA thất bại:", err);
+  });
 }
 
 // 3. Auto-Update Version Checker (GitHub Raw API)
@@ -552,6 +651,54 @@ if (chrome.alarms) {
     if (alarm.name === "check_update_alarm") checkForUpdates();
   });
 }
+
+// Tu khoa khi dong popup: task bat dong bo cua popup bi huy khi trinh trinh popup bi dung,
+// nhung su kien tat cong ket noi cua SW thi khong. Popup mo cong "vault-session" khi hoat dong.
+chrome.runtime.onConnect.addListener((port) => {
+  if (!port || port.name !== "vault-session") return;
+  port.onDisconnect.addListener(async () => {
+    try {
+      const { genOptions } = await chrome.storage.local.get("genOptions");
+      if (genOptions && genOptions.vaultLockClose) {
+        await chrome.storage.session.remove("genVaultKey");
+      }
+    } catch (e) { /* bo qua: popup da dong */ }
+  });
+});
+
+// Cau hoi tu popup va content script ve trang thai / du lieu kho
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (!msg || !msg.action) return;
+
+  if (msg.action === "vault_lock") {
+    chrome.storage.session.remove("genVaultKey");
+    sendResponse({ ok: true });
+    return;
+  }
+
+  if (msg.action === "vault_state") {
+    vaultContext().then(ctx => {
+      sendResponse({ enabled: ctx.vault != null, locked: !!ctx.locked });
+    });
+    return true;
+  }
+
+  if (msg.action === "vault_get") {
+    vaultRead(msg.keys).then(sendResponse);
+    return true;
+  }
+
+  if (msg.action === "vault_put") {
+    vaultMutate(msg.items || {}).then(
+      () => sendResponse({ ok: true }),
+      err => {
+        console.error("vault_put thất bại:", err);
+        sendResponse({ ok: false, locked: String(err && err.message) === "VAULT_LOCKED" });
+      }
+    );
+    return true;
+  }
+});
 
 // Initial check on worker load
 checkForUpdates();
