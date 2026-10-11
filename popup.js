@@ -211,6 +211,7 @@ function calculatePassphraseStrength(numWords, includeNumber, wordlistSize = 129
 // UI Controller
 document.addEventListener("DOMContentLoaded", () => {
   const els = {
+    navTabs: document.getElementById("nav-tabs"),
     tabGen: document.getElementById("tab-gen"),
     tabHistory: document.getElementById("tab-history"),
     viewGen: document.getElementById("view-gen"),
@@ -355,7 +356,24 @@ document.addEventListener("DOMContentLoaded", () => {
     optVaultTimeout: document.getElementById("opt-vault-timeout"),
     vaultExtraSettings: document.getElementById("vault-extra-settings"),
     vaultStatus: document.getElementById("vault-status"),
-    btnVaultChangePin: document.getElementById("btn-vault-change-pin")
+    btnVaultChangePin: document.getElementById("btn-vault-change-pin"),
+    btnLangToggle: document.getElementById("btn-lang-toggle"),
+    tabAbout: document.getElementById("tab-about"),
+    viewAbout: document.getElementById("view-about"),
+    aboutVersion: document.getElementById("about-version"),
+    aboutGithub: document.getElementById("about-github"),
+    aboutLicense: document.getElementById("about-license"),
+    aboutQrImg: document.getElementById("about-qr-img"),
+    aboutQrError: document.getElementById("about-qr-error"),
+    aboutBankName: document.getElementById("about-bank-name"),
+    aboutBankNumber: document.getElementById("about-bank-number"),
+    aboutBankHolder: document.getElementById("about-bank-holder"),
+    aboutBankMemo: document.getElementById("about-bank-memo"),
+    aboutCopyNumber: document.getElementById("about-copy-number"),
+    aboutCopyMemo: document.getElementById("about-copy-memo"),
+    cardDonatePaypal: document.getElementById("card-donate-paypal"),
+    aboutPaypalLink: document.getElementById("about-paypal-link"),
+    aboutPaypalNote: document.getElementById("about-paypal-note")
   };
 
   let currentGenMode = "password";
@@ -392,6 +410,267 @@ document.addEventListener("DOMContentLoaded", () => {
   let vaultOpts = { vaultEnabled: false, vaultLockClose: true, vaultTimeoutMin: 15 };
   let vaultPort = null; // port toi SW: dong popup thi SW xoa key phien
   let vaultHeartbeat = null;
+
+  // Thong tin ung ho. De trong neu chua cap hinh: popup an phan do thay vi hien link rong.
+  const GITHUB_URL = "https://github.com/lengoctuong2005/GenPass";
+  const DONATE_INFO = {
+    bankName: "Techcombank",
+    accountNumber: "1005555555555",
+    accountHolder: "LE NGOC TUONG",
+    transferMemo: "GenPass Ung Ho",
+    qrImage:
+      "https://img.vietqr.io/image/TCB-1005555555555-qr_only.png?amount=0&addInfo=GenPass%20Ung%20Ho&accountName=LE%20NGOC%20TUONG",
+    paypalUrl: ""
+  };
+
+  let currentLang = "vi";
+  let vaultFailedAttempts = 0;
+  let vaultLockoutUntil = 0;
+
+  const I18N = {
+    vi: {
+      "tabs.generator": "Mật khẩu",
+      "tabs.history": "Lịch sử",
+      "tabs.cards": "Thanh toán",
+      "tabs.about": "Ủng hộ",
+      "vault.lockTitle": "Kho đã khóa",
+      "vault.lockSub": "Nhập mã PIN hoặc mật khẩu để mở kho",
+      "vault.pinPlaceholder": "Mã PIN hoặc mật khẩu",
+      "vault.unlockBtn": "Mở khóa",
+      "vault.pinRule": "Tối thiểu 8 ký tự, khuyến nghị 12 ký tự trở lên. Nếu chỉ dùng số thì tối thiểu 10 số.",
+      "update.badge": "CẬP NHẬT",
+      "update.text": "Đã có bản mới!",
+      "update.view": "Xem bản mới",
+      "common.close": "Đóng",
+      "gen.copyBtn": "Sao chép",
+      "gen.copied": "Đã chép ✓",
+      "gen.namePlaceholder": "Tên dịch vụ (vd: Facebook...)",
+      "gen.userPlaceholder": "Tài khoản / Email...",
+      "gen.notePlaceholder": "Ghi chú bảo mật (mã backup 2FA, PIN, câu hỏi bảo mật...)",
+      "gen.strengthLabel": "Độ mạnh:",
+      "gen.modePassword": "Mật khẩu",
+      "gen.modePassphrase": "Cụm từ (Passphrase)",
+      "gen.length": "Độ dài",
+      "gen.optUpper": "Chữ hoa (A-Z)",
+      "gen.optLower": "Chữ thường (a-z)",
+      "gen.optNumbers": "Chữ số (0-9)",
+      "gen.optSpecial": "Ký tự đặc biệt (!@#$%^&*)",
+      "gen.optAmbiguous": "Tránh ký tự nhầm lẫn (l, 1, I, O, 0, v.v.)",
+      "gen.advanced": "Tùy chọn nâng cao",
+      "gen.minNumbers": "Tối thiểu số lượng số:",
+      "gen.minSpecial": "Tối thiểu ký tự đặc biệt:",
+      "gen.words": "Số lượng từ",
+      "gen.separator": "Ký tự phân cách",
+      "gen.passphraseCap": "Viết hoa chữ đầu (Word)",
+      "gen.passphraseNum": "Kèm số ngẫu nhiên (0-9)",
+      "settings.autosave": "Hỏi lưu mật khẩu khi đăng ký / đăng nhập",
+      "settings.autofill": "Gợi ý tự động điền mật khẩu trên trang web",
+      "settings.autoClearClipboard": "Tự động xóa clipboard sau 30 giây",
+      "settings.vaultHeader": "BẢO MẬT KHO",
+      "settings.vaultNote": "Kho mã hóa chống lấy cắp dữ liệu khi trình duyệt đã tắt. Không chống malware hoặc extension độc hại chạy khi kho đang mở.",
+      "settings.vaultEnable": "Bảo vệ kho bằng mã bảo vệ (mã hóa AES-256)",
+      "settings.vaultLockClose": "Tự khóa ngay khi đóng popup",
+      "settings.vaultTimeout": "Tự khóa sau thời gian không dùng",
+      "settings.vaultChangePin": "Đổi mã PIN",
+      "history.title": "Lịch sử",
+      "history.import": "Nhập",
+      "history.export": "Xuất",
+      "history.tags": "Nhãn",
+      "history.clear": "Xóa",
+      "history.searchPlaceholder": "Tìm theo nền tảng, tài khoản, URL...",
+      "twofa.title": "Mã 2FA",
+      "twofa.add": "+ Thêm",
+      "twofa.scan": "Quét QR",
+      "twofa.upload": "Tải ảnh",
+      "cards.title": "Hồ sơ thanh toán",
+      "cards.add": "+ Thêm hồ sơ",
+      "cookies.title": "Quản lý Cookies",
+      "cookies.saveSession": "+ Lưu phiên",
+      "cookies.import": "Nhập",
+      "cookies.export": "Xuất",
+      "cookies.logout": "Đăng xuất",
+      "about.title": "GenPass",
+      "about.lede": "Trình tạo mật khẩu và xác thực 2FA chạy hoàn toàn trên máy bạn. Không máy chủ, không tài khoản, không theo dõi hành vi.",
+      "about.github": "Mã nguồn trên GitHub",
+      "about.license": "Giấy phép MIT",
+      "about.support": "Ủng hộ dự án",
+      "about.donateNote": "GenPass miễn phí và không có quảng cáo. Nếu tiện ích giúp ích cho bạn, một ly cà phê giúp dự án tiếp tục được duy trì.",
+      "about.qrLabel": "VietQR (Napas 24/7)",
+      "about.qrError": "Không tải được mã QR. Dùng thông tin chuyển khoản bên cạnh.",
+      "about.qrHint": "Quét bằng app ngân hàng bất kỳ",
+      "about.bankLabel": "Chuyển khoản",
+      "about.bankName": "Ngân hàng",
+      "about.accountNumber": "Số tài khoản",
+      "about.accountHolder": "Chủ tài khoản",
+      "about.memo": "Nội dung",
+      "about.copy": "Chép",
+      "about.copied": "Đã chép ✓",
+      "about.paypalLabel": "PayPal",
+      "about.paypalPending": "Chưa cấu hình tài khoản PayPal. Đặt địa chỉ PayPal trong hằng số DONATE_INFO ở đầu popup.js.",
+      "about.paypalOpen": "Mở trang PayPal",
+      "about.footerNote": "Mật khẩu, khóa 2FA và dữ liệu kho luôn nằm trên thiết bị của bạn."
+    },
+    en: {
+      "tabs.generator": "Passwords",
+      "tabs.history": "History",
+      "tabs.cards": "Payments",
+      "tabs.about": "Support",
+      "vault.lockTitle": "Vault is Locked",
+      "vault.lockSub": "Enter PIN or master password to unlock",
+      "vault.pinPlaceholder": "PIN or master password",
+      "vault.unlockBtn": "Unlock",
+      "vault.pinRule": "Minimum 8 characters (12+ recommended). If digits only, minimum 10 digits.",
+      "update.badge": "UPDATE",
+      "update.text": "New version available!",
+      "update.view": "View update",
+      "common.close": "Close",
+      "gen.copyBtn": "Copy",
+      "gen.copied": "Copied ✓",
+      "gen.namePlaceholder": "Service name (e.g. GitHub, Google...)",
+      "gen.userPlaceholder": "Username / Email...",
+      "gen.notePlaceholder": "Secure notes (2FA backup codes, PIN, security questions...)",
+      "gen.strengthLabel": "Strength:",
+      "gen.modePassword": "Password",
+      "gen.modePassphrase": "Passphrase",
+      "gen.length": "Length",
+      "gen.optUpper": "Uppercase (A-Z)",
+      "gen.optLower": "Lowercase (a-z)",
+      "gen.optNumbers": "Numbers (0-9)",
+      "gen.optSpecial": "Special symbols (!@#$%^&*)",
+      "gen.optAmbiguous": "Avoid ambiguous (l, 1, I, O, 0, etc.)",
+      "gen.advanced": "Advanced options",
+      "gen.minNumbers": "Minimum numbers:",
+      "gen.minSpecial": "Minimum symbols:",
+      "gen.words": "Word count",
+      "gen.separator": "Separator",
+      "gen.passphraseCap": "Capitalize words (Word)",
+      "gen.passphraseNum": "Include random number (0-9)",
+      "settings.autosave": "Prompt to save credentials on login / register",
+      "settings.autofill": "Suggest password autofill on web pages",
+      "settings.autoClearClipboard": "Auto-clear clipboard after 30 seconds",
+      "settings.vaultHeader": "VAULT SECURITY",
+      "settings.vaultNote": "Encrypted vault protects credentials at rest when the browser is closed. Does not protect against malware running while the vault is open.",
+      "settings.vaultEnable": "Protect vault with master secret (AES-256 encryption)",
+      "settings.vaultLockClose": "Auto-lock immediately when popup closes",
+      "settings.vaultTimeout": "Auto-lock idle timeout",
+      "settings.vaultChangePin": "Change PIN",
+      "history.title": "History",
+      "history.import": "Import",
+      "history.export": "Export",
+      "history.tags": "Tags",
+      "history.clear": "Clear",
+      "history.searchPlaceholder": "Search by platform, account, URL...",
+      "twofa.title": "2FA (TOTP)",
+      "twofa.add": "+ Add",
+      "twofa.scan": "Scan QR",
+      "twofa.upload": "Upload QR",
+      "cards.title": "Payment Profiles",
+      "cards.add": "+ Add Profile",
+      "cookies.title": "Cookie Manager",
+      "cookies.saveSession": "+ Save Session",
+      "cookies.import": "Import",
+      "cookies.export": "Export",
+      "cookies.logout": "Log out",
+      "about.title": "GenPass",
+      "about.lede": "Offline-first password generator and 2FA authenticator running entirely on your machine. No servers, no accounts, zero tracking.",
+      "about.github": "Source code on GitHub",
+      "about.license": "MIT License",
+      "about.support": "Support the Project",
+      "about.donateNote": "GenPass is 100% free with no ads. If you find it helpful, buying a coffee helps sustain ongoing development.",
+      "about.qrLabel": "VietQR (Napas 24/7)",
+      "about.qrError": "Unable to load QR image. Please use bank details on the right.",
+      "about.qrHint": "Scan with any mobile banking app",
+      "about.bankLabel": "Direct Bank Transfer",
+      "about.bankName": "Bank",
+      "about.accountNumber": "Account number",
+      "about.accountHolder": "Account holder",
+      "about.memo": "Transfer memo",
+      "about.copy": "Copy",
+      "about.copied": "Copied ✓",
+      "about.paypalLabel": "PayPal",
+      "about.paypalPending": "PayPal account not yet configured. Set paypalUrl in DONATE_INFO in popup.js.",
+      "about.paypalOpen": "Open PayPal page",
+      "about.footerNote": "Passwords, 2FA keys, and vault data always remain securely on your device."
+    }
+  };
+
+  function t(key) {
+    return I18N[currentLang]?.[key] || I18N["vi"]?.[key] || key;
+  }
+
+  function applyI18n(lang) {
+    currentLang = lang === "en" ? "en" : "vi";
+    if (typeof document !== "undefined" && document.documentElement) {
+      document.documentElement.lang = currentLang;
+    }
+
+    if (els.btnLangToggle) {
+      els.btnLangToggle.textContent = currentLang === "vi" ? "EN" : "VI";
+      els.btnLangToggle.title = currentLang === "vi"
+        ? "Chuyển sang tiếng Anh / Switch to English"
+        : "Switch to Vietnamese / Chuyển sang tiếng Việt";
+    }
+
+    if (typeof document !== "undefined" && document.querySelectorAll) {
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const k = el.getAttribute("data-i18n");
+        if (k && I18N[currentLang]?.[k]) el.textContent = I18N[currentLang][k];
+      });
+      document.querySelectorAll("[data-i18n-placeholder]").forEach(el => {
+        const k = el.getAttribute("data-i18n-placeholder");
+        if (k && I18N[currentLang]?.[k]) el.placeholder = I18N[currentLang][k];
+      });
+      document.querySelectorAll("[data-i18n-title]").forEach(el => {
+        const k = el.getAttribute("data-i18n-title");
+        if (k && I18N[currentLang]?.[k]) el.title = I18N[currentLang][k];
+      });
+    }
+
+    if (els.viewAbout && els.viewAbout.classList.contains("active")) {
+      renderAbout();
+    }
+  }
+
+  function renderAbout() {
+    if (!els.viewAbout) return;
+    const version = (typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version) || "1.2.0";
+    if (els.aboutVersion) {
+      els.aboutVersion.textContent = `v${version} · MIT`;
+    }
+    if (els.aboutBankName) els.aboutBankName.textContent = DONATE_INFO.bankName;
+    if (els.aboutBankNumber) els.aboutBankNumber.textContent = DONATE_INFO.accountNumber;
+    if (els.aboutBankHolder) els.aboutBankHolder.textContent = DONATE_INFO.accountHolder;
+    if (els.aboutBankMemo) els.aboutBankMemo.textContent = DONATE_INFO.transferMemo;
+
+    if (els.aboutQrImg) {
+      if (DONATE_INFO.qrImage) {
+        els.aboutQrImg.src = DONATE_INFO.qrImage;
+        els.aboutQrImg.alt = `VietQR ${DONATE_INFO.bankName} ${DONATE_INFO.accountNumber}`;
+        els.aboutQrImg.hidden = false;
+        if (els.aboutQrError) els.aboutQrError.hidden = true;
+        els.aboutQrImg.onerror = () => {
+          els.aboutQrImg.hidden = true;
+          if (els.aboutQrError) els.aboutQrError.hidden = false;
+        };
+      } else {
+        els.aboutQrImg.hidden = true;
+        if (els.aboutQrError) els.aboutQrError.hidden = false;
+      }
+    }
+
+    if (els.cardDonatePaypal) {
+      if (DONATE_INFO.paypalUrl) {
+        els.cardDonatePaypal.hidden = false;
+        if (els.aboutPaypalLink) {
+          els.aboutPaypalLink.href = DONATE_INFO.paypalUrl;
+          els.aboutPaypalLink.hidden = false;
+        }
+        if (els.aboutPaypalNote) els.aboutPaypalNote.hidden = true;
+      } else {
+        els.cardDonatePaypal.hidden = true;
+      }
+    }
+  }
 
   const EYE_ON_SVG = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
   const EYE_OFF_SVG = `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
@@ -936,7 +1215,8 @@ document.addEventListener("DOMContentLoaded", () => {
       maskPassword: els.display ? els.display.type === "password" : true,
       vaultEnabled: els.optVaultEnabled ? els.optVaultEnabled.checked : false,
       vaultLockClose: els.optVaultLockClose ? els.optVaultLockClose.checked : false,
-      vaultTimeoutMin: els.optVaultTimeout ? Number(els.optVaultTimeout.value) : 15
+      vaultTimeoutMin: els.optVaultTimeout ? Number(els.optVaultTimeout.value) : 15,
+      lang: currentLang
     };
   }
 
@@ -1092,14 +1372,26 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function vaultUnlock() {
     if (!vaultBlob || !vaultReady()) return;
-    const pin = (els.vaultPin?.value || "").trim();
-    if (!pin) {
-      vaultShowError(els.vaultLockError, "Nhập mã PIN");
+    if (vaultLockoutUntil > Date.now()) {
+      const waitSec = Math.ceil((vaultLockoutUntil - Date.now()) / 1000);
+      vaultShowError(
+        els.vaultLockError,
+        currentLang === "en"
+          ? `Too many failed attempts. Please wait ${waitSec}s.`
+          : `Mã PIN không đúng. Nhập sai quá nhiều lần, vui lòng đợi ${waitSec}s.`
+      );
       return;
     }
-    vaultBusy(els.vaultUnlockBtn, true, "Đang mở khóa…");
+    const pin = (els.vaultPin?.value || "").trim();
+    if (!pin) {
+      vaultShowError(els.vaultLockError, currentLang === "en" ? "Enter PIN" : "Nhập mã PIN");
+      return;
+    }
+    vaultBusy(els.vaultUnlockBtn, true, currentLang === "en" ? "Unlocking…" : "Đang mở khóa…");
     try {
       const { data, keyB64 } = await GPVault.unlockWithPin(vaultBlob, pin);
+      vaultFailedAttempts = 0;
+      vaultLockoutUntil = 0;
       vaultFill(data, keyB64); // keyB64 la chuoi base64 cua key tho
       await vaultSessionSet(keyB64, vaultTimeoutMin());
       vaultOn = true;
@@ -1109,13 +1401,18 @@ document.addEventListener("DOMContentLoaded", () => {
       vaultRunAfterUnlock();
     } catch (err) {
       console.warn("Mo kho that bai:", err);
-      vaultShowError(els.vaultLockError, "Mã PIN không đúng");
+      vaultFailedAttempts++;
+      if (vaultFailedAttempts >= 5) {
+        vaultLockoutUntil = Date.now() + 15000;
+      }
+      const errMsg = currentLang === "en" ? "Incorrect PIN" : "Mã PIN không đúng";
+      vaultShowError(els.vaultLockError, errMsg);
       if (els.vaultPin) {
         els.vaultPin.value = "";
         els.vaultPin.focus();
       }
     } finally {
-      vaultBusy(els.vaultUnlockBtn, false, "Mở khóa");
+      vaultBusy(els.vaultUnlockBtn, false, currentLang === "en" ? "Unlock" : "Mở khóa");
     }
   }
 
@@ -1316,6 +1613,7 @@ document.addEventListener("DOMContentLoaded", () => {
       chrome.storage.local.get(["genOptions", "genHistory", "genTags", "gen2FA", "genCards", "genCookieProfiles", "genVault"], (res) => {
         if (res.genOptions) {
           const o = res.genOptions;
+          if (o.lang) applyI18n(o.lang);
           vaultOpts.vaultEnabled = o.vaultEnabled === true;
           vaultOpts.vaultLockClose = o.vaultLockClose !== false; // mac dinh: tu khoa khi dong popup
           vaultOpts.vaultTimeoutMin = Number(o.vaultTimeoutMin ?? 15);
@@ -2728,18 +3026,27 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter") handleAddTag();
   });
 
-  // Tab switching
+  // Tab switching & smooth auto-scroll on slider
   function switchTab(tabEl, viewEl) {
-    [els.tabGen, els.tabHistory, els.tab2Fa, els.tabCards, els.tabCookies].forEach(t => t?.classList.remove("active"));
-    [els.viewGen, els.viewHistory, els.view2Fa, els.viewCards, els.viewCookies].forEach(v => v?.classList.remove("active"));
+    [els.tabGen, els.tabHistory, els.tab2Fa, els.tabCards, els.tabCookies, els.tabAbout].forEach(t => t?.classList.remove("active"));
+    [els.viewGen, els.viewHistory, els.view2Fa, els.viewCards, els.viewCookies, els.viewAbout].forEach(v => v?.classList.remove("active"));
     tabEl?.classList.add("active");
     viewEl?.classList.add("active");
+
+    if (tabEl && typeof tabEl.scrollIntoView === "function") {
+      try {
+        tabEl.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+      } catch (e) { /* DOM gia hoac phien ban cu */ }
+    }
+
     if (viewEl === els.view2Fa) {
       render2FA();
     } else if (viewEl === els.viewCards) {
       renderCards();
     } else if (viewEl === els.viewCookies) {
       renderCookieProfiles();
+    } else if (viewEl === els.viewAbout) {
+      renderAbout();
     }
   }
 
@@ -2751,6 +3058,74 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (els.tabCookies && els.viewCookies) {
     els.tabCookies.addEventListener("click", () => switchTab(els.tabCookies, els.viewCookies));
+  }
+  if (els.tabAbout && els.viewAbout) {
+    els.tabAbout.addEventListener("click", () => switchTab(els.tabAbout, els.viewAbout));
+  }
+
+  if (els.navTabs) {
+    els.navTabs.addEventListener("wheel", (e) => {
+      if (e.deltaY !== 0) {
+        e.preventDefault();
+        els.navTabs.scrollLeft += e.deltaY;
+      }
+    }, { passive: false });
+  }
+
+  if (els.btnLangToggle) {
+    els.btnLangToggle.addEventListener("click", () => {
+      const nextLang = currentLang === "vi" ? "en" : "vi";
+      const opts = getOptions();
+      opts.lang = nextLang;
+      saveOptions(opts);
+      applyI18n(nextLang);
+      showToast(nextLang === "en" ? "Switched to English!" : "Đã chuyển sang Tiếng Việt!");
+    });
+  }
+
+  if (els.aboutGithub) {
+    els.aboutGithub.addEventListener("click", () => {
+      if (chrome?.tabs?.create) {
+        chrome.tabs.create({ url: GITHUB_URL });
+      } else {
+        window.open(GITHUB_URL, "_blank");
+      }
+    });
+  }
+
+  if (els.aboutLicense) {
+    els.aboutLicense.addEventListener("click", () => {
+      const licUrl = `${GITHUB_URL}/blob/main/LICENSE`;
+      if (chrome?.tabs?.create) {
+        chrome.tabs.create({ url: licUrl });
+      } else {
+        window.open(licUrl, "_blank");
+      }
+    });
+  }
+
+  if (els.aboutCopyNumber) {
+    els.aboutCopyNumber.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(DONATE_INFO.accountNumber);
+      scheduleClipboardClear(DONATE_INFO.accountNumber);
+      els.aboutCopyNumber.textContent = t("about.copied");
+      setTimeout(() => {
+        els.aboutCopyNumber.textContent = t("about.copy");
+      }, 2000);
+      showToast(currentLang === "en" ? "Copied account number!" : "Đã sao chép số tài khoản!");
+    });
+  }
+
+  if (els.aboutCopyMemo) {
+    els.aboutCopyMemo.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(DONATE_INFO.transferMemo);
+      scheduleClipboardClear(DONATE_INFO.transferMemo);
+      els.aboutCopyMemo.textContent = t("about.copied");
+      setTimeout(() => {
+        els.aboutCopyMemo.textContent = t("about.copy");
+      }, 2000);
+      showToast(currentLang === "en" ? "Copied transfer memo!" : "Đã sao chép nội dung chuyển khoản!");
+    });
   }
 
   // 2FA Add/Cancel/Save

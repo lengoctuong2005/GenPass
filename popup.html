@@ -10,26 +10,32 @@
   <div class="app-container">
     <!-- Header with tabs -->
     <header class="app-header">
-      <div class="brand">
-        <svg class="brand-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.59 2.04-1.46 2.56L14 15h-4v-2.44A2.99 2.99 0 0 1 9 10c0-1.66 1.34-3 3-3z"/>
-        </svg>
-        <span class="brand-name">GenPass</span>
+      <div class="header-top">
+        <div class="brand">
+          <svg class="brand-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.59 2.04-1.46 2.56L14 15h-4v-2.44A2.99 2.99 0 0 1 9 10c0-1.66 1.34-3 3-3z"/>
+          </svg>
+          <span class="brand-name">GenPass</span>
+        </div>
+        <div class="header-actions">
+          <button id="btn-lang-toggle" class="btn-lang" type="button" title="Chuyển sang tiếng Anh / Switch to English">EN</button>
+        </div>
       </div>
-      <nav class="nav-tabs">
-        <button id="tab-gen" class="tab-btn active" type="button">Mật khẩu</button>
+      <nav id="nav-tabs" class="nav-tabs" aria-label="Main tabs">
+        <button id="tab-gen" class="tab-btn active" type="button" data-i18n="tabs.generator">Mật khẩu</button>
         <button id="tab-history" class="tab-btn" type="button">
-          Lịch sử <span id="history-count" class="badge">0</span>
+          <span data-i18n="tabs.history">Lịch sử</span> <span id="history-count" class="badge">0</span>
         </button>
         <button id="tab-2fa" class="tab-btn" type="button">
           2FA <span id="count-2fa" class="badge">0</span>
         </button>
         <button id="tab-cards" class="tab-btn" type="button">
-          Thanh toán <span id="count-cards" class="badge">0</span>
+          <span data-i18n="tabs.cards">Thanh toán</span> <span id="count-cards" class="badge">0</span>
         </button>
         <button id="tab-cookies" class="tab-btn" type="button">
           Cookies <span id="count-cookies" class="badge">0</span>
         </button>
+        <button id="tab-about" class="tab-btn" type="button" data-i18n="tabs.about">Ủng hộ</button>
       </nav>
     </header>
 
@@ -39,13 +45,13 @@
         <svg class="vault-lock-icon" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.59 2.04-1.46 2.56L14 15h-4v-2.44A2.99 2.99 0 0 1 9 10c0-1.66 1.34-3 3-3z"/>
         </svg>
-        <h2 class="vault-lock-title">Kho đã khóa</h2>
-        <p class="vault-lock-sub">Nhập mã PIN hoặc mật khẩu để mở kho</p>
+        <h2 class="vault-lock-title" data-i18n="vault.lockTitle">Kho đã khóa</h2>
+        <p class="vault-lock-sub" data-i18n="vault.lockSub">Nhập mã PIN hoặc mật khẩu để mở kho</p>
         <div class="vault-lock-form">
-          <input type="password" id="vault-pin" autocomplete="off" maxlength="64" placeholder="Mã PIN hoặc mật khẩu" aria-label="Mã PIN hoặc mật khẩu">
-          <button type="button" id="vault-unlock-btn" class="btn-primary">Mở khóa</button>
+          <input type="password" id="vault-pin" autocomplete="off" maxlength="64" placeholder="Mã PIN hoặc mật khẩu" aria-label="Mã PIN hoặc mật khẩu" data-i18n-placeholder="vault.pinPlaceholder">
+          <button type="button" id="vault-unlock-btn" class="btn-primary" data-i18n="vault.unlockBtn">Mở khóa</button>
         </div>
-        <p class="text-muted" style="font-size: 11px; margin: 0;">Tối thiểu 8 ký tự, khuyến nghị 12 ký tự trở lên. Nếu chỉ dùng số thì tối thiểu 10 số.</p>
+        <p class="text-muted" style="font-size: 11px; margin: 0;" data-i18n="vault.pinRule">Tối thiểu 8 ký tự, khuyến nghị 12 ký tự trở lên. Nếu chỉ dùng số thì tối thiểu 10 số.</p>
         <p id="vault-lock-error" class="vault-lock-error" hidden></p>
       </div>
     </div>
@@ -53,12 +59,12 @@
     <!-- Update Banner -->
     <div id="update-banner" class="update-banner" hidden style="display: none;">
       <div class="update-info">
-        <span class="update-badge">CẬP NHẬT</span>
-        <span id="update-text">Đã có bản mới!</span>
+        <span class="update-badge" data-i18n="update.badge">CẬP NHẬT</span>
+        <span id="update-text" data-i18n="update.text">Đã có bản mới!</span>
       </div>
       <div class="update-actions">
-        <button type="button" id="btn-view-update" class="update-btn">Xem bản mới</button>
-        <button type="button" id="btn-dismiss-update" class="dismiss-update-btn" title="Đóng">&times;</button>
+        <button type="button" id="btn-view-update" class="update-btn" data-i18n="update.view">Xem bản mới</button>
+        <button type="button" id="btn-dismiss-update" class="dismiss-update-btn" title="Đóng" data-i18n-title="common.close">&times;</button>
       </div>
     </div>
 
@@ -490,6 +496,95 @@
       <div id="list-cookie-profiles" class="cookie-profiles-list">
         <!-- Rendered dynamically -->
       </div>
+    </main>
+
+    <!-- About / Donate View -->
+    <main id="view-about" class="view-panel">
+      <section class="card about-card">
+        <div class="about-head">
+          <svg class="about-brand-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.59 2.04-1.46 2.56L14 15h-4v-2.44A2.99 2.99 0 0 1 9 10c0-1.66 1.34-3 3-3z"/>
+          </svg>
+          <div class="about-head-text">
+            <h2 class="about-title" data-i18n="about.title">GenPass</h2>
+            <p class="about-version" id="about-version"></p>
+          </div>
+        </div>
+
+        <p class="about-lede" data-i18n="about.lede">
+          Trình tạo mật khẩu và xác thực 2FA chạy hoàn toàn trên máy bạn. Không máy chủ, không tài khoản, không theo dõi hành vi.
+        </p>
+
+        <div class="about-links">
+          <button type="button" id="about-github" class="about-link-btn" data-i18n="about.github">
+            <svg class="icon-small" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7 0-.7 0-.7 1.2 0 1.9 1.2 1.9 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.3-.6-1.6.1-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.6.3 2.9.1 3.2.8.8 1.3 1.9 1.3 3.1 0 4.7-2.8 5.7-5.5 6 .4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+            Mã nguồn trên GitHub
+          </button>
+          <button type="button" id="about-license" class="about-link-btn" data-i18n="about.license">
+            <svg class="icon-small" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Giấy phép MIT
+          </button>
+        </div>
+
+        <div class="about-divider"><span data-i18n="about.support">Ủng hộ dự án</span></div>
+
+        <p class="about-donate-note" data-i18n="about.donateNote">
+          GenPass miễn phí và không có quảng cáo. Nếu tiện ích giúp ích cho bạn, một ly cà phê giúp dự án tiếp tục được duy trì.
+        </p>
+
+        <div class="about-donate-grid">
+          <div class="about-donate-card">
+            <span class="about-donate-label" data-i18n="about.qrLabel">VietQR (Napas 24/7)</span>
+            <div class="about-qr-frame">
+              <img id="about-qr-img" src="" alt="" width="224" height="224" decoding="async" loading="lazy" hidden>
+              <p id="about-qr-error" class="about-qr-error" data-i18n="about.qrError" hidden>Không tải được mã QR. Dùng thông tin chuyển khoản bên cạnh.</p>
+            </div>
+            <span class="about-donate-hint" data-i18n="about.qrHint">Quét bằng app ngân hàng bất kỳ</span>
+          </div>
+
+          <div class="about-donate-card">
+            <span class="about-donate-label" data-i18n="about.bankLabel">Chuyển khoản</span>
+            <dl class="about-bank-list">
+              <div class="about-bank-row">
+                <dt data-i18n="about.bankName">Ngân hàng</dt>
+                <dd id="about-bank-name"></dd>
+              </div>
+              <div class="about-bank-row">
+                <dt data-i18n="about.accountNumber">Số tài khoản</dt>
+                <dd class="about-copy-row">
+                  <strong id="about-bank-number"></strong>
+                  <button type="button" id="about-copy-number" class="about-copy-btn" data-i18n="about.copy">Chép</button>
+                </dd>
+              </div>
+              <div class="about-bank-row">
+                <dt data-i18n="about.accountHolder">Chủ tài khoản</dt>
+                <dd id="about-bank-holder"></dd>
+              </div>
+              <div class="about-bank-row">
+                <dt data-i18n="about.memo">Nội dung</dt>
+                <dd class="about-copy-row">
+                  <span id="about-bank-memo"></span>
+                  <button type="button" id="about-copy-memo" class="about-copy-btn" data-i18n="about.copy">Chép</button>
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          <div class="about-donate-card" id="card-donate-paypal" hidden>
+            <span class="about-donate-label" data-i18n="about.paypalLabel">PayPal</span>
+            <p class="about-paypal-note" id="about-paypal-note" data-i18n="about.paypalPending">
+              Chưa cấu hình tài khoản PayPal. Đặt địa chỉ PayPal trong hằng số DONATE_INFO ở đầu popup.js.
+            </p>
+            <a id="about-paypal-link" class="about-paypal-link" href="#" hidden rel="noopener noreferrer" target="_blank" data-i18n="about.paypalOpen">
+              Mở trang PayPal
+            </a>
+          </div>
+        </div>
+
+        <p class="about-footer-note" data-i18n="about.footerNote">
+          Mật khẩu, khóa 2FA và dữ liệu kho luôn nằm trên thiết bị của bạn.
+        </p>
+      </section>
     </main>
 
     <!-- Modal Quản lý nhãn -->

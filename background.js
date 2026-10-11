@@ -31,9 +31,13 @@ try {
   }
 } catch (e) { /* bo qua: API cu chi ho tro callback */ }
 
-// 1. Setup Hierarchical Context Menus
-chrome.runtime.onInstalled.addListener(() => {
+// 1. Setup Hierarchical Context Menus (Ho tro song ngu VI / EN)
+function setupContextMenus(lang) {
+  const isEn = lang === "en";
+  if (!chrome.contextMenus || !chrome.contextMenus.removeAll) return;
   chrome.contextMenus.removeAll(() => {
+    if (chrome.runtime?.lastError) {}
+
     // Root Menu
     chrome.contextMenus.create({
       id: "genpass_root",
@@ -41,94 +45,112 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ["all"]
     });
 
-    // Submenu 1: Tạo mật khẩu
+    // Submenu 1: Tạo mật khẩu / Generate Password
     chrome.contextMenus.create({
       id: "genpass_menu_generate",
       parentId: "genpass_root",
-      title: "Tạo mật khẩu",
+      title: isEn ? "Generate password" : "Tạo mật khẩu",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "gen_std_16",
       parentId: "genpass_menu_generate",
-      title: "Mật khẩu chuẩn (16 ký tự)",
+      title: isEn ? "Standard password (16 chars)" : "Mật khẩu chuẩn (16 ký tự)",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "gen_passphrase_4",
       parentId: "genpass_menu_generate",
-      title: "Cụm từ dễ nhớ (Passphrase 4 từ)",
+      title: isEn ? "Passphrase (4 words)" : "Cụm từ dễ nhớ (Passphrase 4 từ)",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "gen_long_32",
       parentId: "genpass_menu_generate",
-      title: "Mật khẩu siêu dài (32 ký tự)",
+      title: isEn ? "Long password (32 chars)" : "Mật khẩu siêu dài (32 ký tự)",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "gen_alphanum_12",
       parentId: "genpass_menu_generate",
-      title: "Chữ & số (12 ký tự - cho ngân hàng)",
+      title: isEn ? "Alphanumeric (12 chars - for banks)" : "Chữ & số (12 ký tự - cho ngân hàng)",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "gen_pin_6",
       parentId: "genpass_menu_generate",
-      title: "Mã PIN số (6 số)",
+      title: isEn ? "PIN (6 digits)" : "Mã PIN số (6 số)",
       contexts: ["all"]
     });
 
-    // Submenu 2: Quét mã QR 2FA
+    // Submenu 2: Quét mã QR 2FA / Scan 2FA QR
     chrome.contextMenus.create({
       id: "genpass_menu_qr",
       parentId: "genpass_root",
-      title: "Quét mã QR 2FA",
+      title: isEn ? "Scan 2FA QR code" : "Quét mã QR 2FA",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "qr_scan_image",
       parentId: "genpass_menu_qr",
-      title: "Quét từ ảnh này",
+      title: isEn ? "Scan from this image" : "Quét từ ảnh này",
       contexts: ["image"]
     });
 
     chrome.contextMenus.create({
       id: "qr_scan_screen",
       parentId: "genpass_menu_qr",
-      title: "Quét toàn bộ trang web này",
+      title: isEn ? "Scan entire page" : "Quét toàn bộ trang web này",
       contexts: ["all"]
     });
 
-    // Submenu 3: Tự động điền
+    // Submenu 3: Tự động điền / Autofill
     chrome.contextMenus.create({
       id: "genpass_menu_fill",
       parentId: "genpass_root",
-      title: "Tự động điền",
+      title: isEn ? "Autofill" : "Tự động điền",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "fill_saved_creds",
       parentId: "genpass_menu_fill",
-      title: "Điền tài khoản đã lưu (theo trang)",
+      title: isEn ? "Fill saved account (by site)" : "Điền tài khoản đã lưu (theo trang)",
       contexts: ["all"]
     });
 
     chrome.contextMenus.create({
       id: "fill_latest_2fa",
       parentId: "genpass_menu_fill",
-      title: "Điền mã OTP 2FA mới nhất",
+      title: isEn ? "Fill latest 2FA OTP code" : "Điền mã OTP 2FA mới nhất",
       contexts: ["all"]
     });
   });
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.storage.local.get("genOptions", (res) => {
+    setupContextMenus(res?.genOptions?.lang || "vi");
+  });
 });
+
+if (chrome.storage?.onChanged) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.genOptions) {
+      const oldLang = changes.genOptions.oldValue?.lang;
+      const newLang = changes.genOptions.newValue?.lang;
+      if (newLang && newLang !== oldLang) {
+        setupContextMenus(newLang);
+      }
+    }
+  });
+}
 
 // Helper: Secure Random Numbers
 function secureRandomInt(max) {
@@ -237,8 +259,42 @@ function parseOtpAuthUrl(urlStr) {
   }
 }
 
+// Chặn SSRF: Chỉ cho phép fetch các URL an toàn (data:, blob:, hoặc domain công khai)
+// Chặn tuyệt đối localhost, 127.0.0.1, dải IP private LAN (10.*, 192.168.*, 172.16-31.*), link-local 169.254.*
+function isSafeFetchUrl(urlStr) {
+  if (!urlStr || typeof urlStr !== "string") return false;
+  const s = urlStr.trim();
+  if (s.startsWith("data:") || s.startsWith("blob:")) return true;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    if (
+      host === "localhost" ||
+      host === "0.0.0.0" ||
+      host.endsWith(".local") ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".internal")
+    ) {
+      return false;
+    }
+    if (/^127\./.test(host)) return false;
+    if (/^10\./.test(host)) return false;
+    if (/^192\.168\./.test(host)) return false;
+    if (/^169\.254\./.test(host)) return false;
+    if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return false;
+    if (host === "::1" || host === "[::1]") return false;
+    if (host.startsWith("fe80:") || host.startsWith("[fe80:")) return false;
+    if (host.startsWith("fc00:") || host.startsWith("[fc00:") || host.startsWith("fd00:") || host.startsWith("[fd00:")) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Helper: Decode QR code from Image URL or Data URI using OffscreenCanvas
 async function decodeQrFromUrl(url) {
+  if (!isSafeFetchUrl(url)) return null;
   try {
     const response = await fetch(url);
     const blob = await response.blob();

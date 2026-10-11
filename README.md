@@ -1,5 +1,7 @@
 # GenPass - Trình Tạo Mật Khẩu & Xác Thực 2FA (TOTP)
 
+[Tiếng Việt](README.md) | [English](README_EN.md)
+
 GenPass là tiện ích mở rộng trình duyệt (Chrome Extension Manifest V3) mã nguồn mở, hoạt động ngoại tuyến 100%. Tiện ích kết hợp giữa trình tạo mật khẩu theo chuẩn ngành (hỗ trợ cả mật khẩu ký tự ngẫu nhiên và cụm từ Passphrase Diceware), trình xác thực hai lớp 2FA/TOTP chuẩn RFC 6238, ghi chú bảo mật (Secure Notes) và hệ thống menu chuột phải tiện lợi.
 
 Toàn bộ dữ liệu được lưu trữ cục bộ trên máy của bạn qua `chrome.storage.local`, không gửi ra bất kỳ máy chủ bên thứ ba nào.
@@ -13,14 +15,16 @@ Toàn bộ dữ liệu được lưu trữ cục bộ trên máy của bạn qua
 | **Mật khẩu ngẫu nhiên** | Độ dài 5 - 64 ký tự, Chữ hoa, Chữ thường, Số, Ký tự đặc biệt, lọc ký tự dễ nhầm (`l`, `1`, `I`, `0`, `O`...). |
 | **Cụm từ Passphrase** | Chuẩn Diceware EFF 1,296 từ dễ nhớ, tùy chọn 3 - 10 từ, ký tự phân cách (`-`, `_`, `.`, khoảng trắng), viết hoa chữ đầu, kèm số ngẫu nhiên. |
 | **Xác thực 2FA (TOTP)** | Tương tự các ứng dụng xác thực phổ biến, chuẩn RFC 6238 (mã 6 số, chu kỳ 30s). Nhập khóa Base32, link `otpauth://`, tải ảnh QR hoặc quét trực tiếp màn hình. |
-| **Quét mã QR đa nền tảng** | Tích hợp bộ giải mã thuần JavaScript `jsQR`, hoạt động ổn định trên cả Windows, macOS, Linux mà không phụ thuộc API trình duyệt. |
+| **Quét mã QR đa nền tảng** | Tích hợp bộ giải mã thuần JavaScript `jsQR`, hoạt động ổn định trên cả Windows, macOS, Linux mà không phụ thuộc API trình duyệt. Tích hợp bộ lọc chống tấn công SSRF. |
 | **Ghi chú bảo mật (Secure Notes)** | Lưu mã backup 2FA (8 ký tự), mã PIN, câu hỏi bảo mật kèm theo tài khoản. Hỗ trợ tìm kiếm và sao chép nhanh 1 chạm. |
 | **Hồ sơ thanh toán (Google Pay, PayPal, Thẻ)** | Lưu trữ thẻ tín dụng/ghi nợ (Visa, Mastercard, JCB, Amex, Napas...) kèm thông tin thanh toán chuẩn Google Pay / PayPal (Họ tên, Số thẻ, CVV, Hạn thẻ, Địa chỉ đường, Thành phố, Bang/Tỉnh, Zip/Postal code, Email, SĐT). Tích hợp kiểm tra Luhn checksum, che số thẻ và nút sao chép toàn bộ thông tin. |
 | **Quản lý Cookies & Chuyển phiên tài khoản** | Quản lý phiên đăng nhập nhiều tài khoản (Multi-Account Session Switcher) theo domain hoàn toàn cục bộ: lưu phiên hiện tại, chuyển đổi tài khoản 1-chạm kèm reload trang, xuất/nhập danh sách cookies dạng JSON chuẩn Cookie-Editor, xóa cookies để đăng xuất nhanh. |
 | **Quản lý lịch sử & Tìm kiếm** | Lưu tối đa 200 mục gần nhất, phân loại theo nhãn tag, hiển thị rõ ràng Tên đăng nhập / Email và Tên nền tảng. Thanh tìm kiếm thời gian thực (Live Search). |
-| **Menu chuột phải (Context Menu)** | Click chuột phải để tạo mật khẩu theo loại, quét mã QR từ ảnh hoặc toàn màn hình, tự động điền tài khoản hoặc mã OTP. |
+| **Menu chuột phải (Context Menu)** | Click chuột phải để tạo mật khẩu theo loại, quét mã QR từ ảnh hoặc toàn màn hình, tự động điền tài khoản hoặc mã OTP. Hỗ trợ song ngữ VI/EN theo cài đặt. |
 | **Tương thích React/Vue 16+** | Sử dụng Native Value Setter descriptor để tự động điền không bị lỗi nuốt chữ trên form React/Vue. |
 | **Bảo mật bộ nhớ tạm** | Tự động xóa mật khẩu hoặc mã OTP khỏi clipboard sau 30 giây nếu người dùng chưa copy nội dung mới. |
+| **Kho mã hóa Argon2id + AES-256-GCM** | Bảo vệ kho lưu trữ bằng mã PIN/mật khẩu chính, tự động khóa khi đóng popup hoặc sau thời gian chờ. Tích hợp cơ chế giới hạn tần suất thử mã để chống brute-force. |
+| **Hỗ trợ đa ngôn ngữ (i18n)** | Chuyển đổi linh hoạt giữa Tiếng Việt và Tiếng Anh với 1 chạm ngay trên thanh tiêu đề. |
 | **Kiểm tra cập nhật tự động** | Tự động kiểm tra bản mới từ GitHub định kỳ, hiển thị huy hiệu `NEW` khi có phiên bản cập nhật. |
 | **Xuất/Nhập CSV** | Định dạng CSV phổ biến của các trình quản lý mật khẩu (`name,url,username,password,note`). |
 
@@ -174,9 +178,20 @@ GenPass chỉ yêu cầu các quyền hạn cần thiết tối thiểu theo chu
 - Tự khóa thêm sau 5, 15 hoặc 30 phút không dùng.
 - Khóa phiên nằm trong `chrome.storage.session`, mất khi tắt trình duyệt. Hết hạn phiên, thao tác đọc/ghi trả về trạng thái đã khóa và yêu cầu nhập lại mã.
 
-### Phạm vi bảo mật
-- Chống việc lấy cắp file profile hoặc bản sao lưu khi trình duyệt đang tắt.
-- KHÔNG chống malware chạy cùng quyền người dùng lúc kho đang mở, và không chống tiện ích mở rộng độc hại khác (có thể đọc `storage.local` đang mở hoặc hook luồng tự động điền).
+### Phạm vi bảo mật & Ranh giới phòng chống mã độc (Threat Model)
+
+#### 1. "Có bảo mật tuyệt đối không?"
+Trong an toàn thông tin hiện đại, **không có giải pháp nào đạt mức bảo mật tuyệt đối 100%**. Một hệ thống an toàn được định nghĩa dựa trên mô hình đe dọa (Threat Model) và các lớp phòng thủ chuyên sâu (Defense in Depth). GenPass áp dụng kiến trúc tối thiểu hóa bề mặt tấn công:
+- **100% Ngoại tuyến (Zero Telemetry)**: Không kết nối máy chủ phân tích, không gửi dữ liệu ra bên ngoài, không cần tạo tài khoản đám mây.
+- **Mã hóa chuẩn quân đội**: Sử dụng thuật toán dẫn xuất khóa nặng bộ nhớ Argon2id (64 MiB RAM, 3 vòng, 4 luồng) kết hợp mã hóa đối xứng xác thực AES-256-GCM và dữ liệu xác thực bổ sung AAD.
+- **Chống Brute-force**: Cơ chế giới hạn tần suất nhập mã PIN ngăn chặn các công cụ tự động thử hàng nghìn mã mỗi giây.
+- **Chống SSRF**: Bộ lọc URL mạng nội bộ ngăn chặn các trang web độc hại lừa extension quét ảnh QR từ `localhost`, `127.0.0.1` hay dải mạng LAN riêng tư.
+- **Chống Phishing**: Tính năng tự động điền chỉ kích hoạt khi host của trang web đang mở khớp chính xác với bản ghi đã lưu, ngăn chặn việc điền nhầm thông tin vào các trang web giả mạo.
+
+#### 2. "Có chống được các loại virus không?"
+**GenPass là tiện ích bảo mật mật khẩu, KHÔNG PHẢI là phần mềm diệt virus (Antivirus / EDR).**
+- **Những gì GenPass bảo vệ**: Bảo vệ kho dữ liệu không bị trích xuất từ file ổ đĩa (`storage.local` / LevelDB) khi trình duyệt tắt; bảo vệ mật khẩu trong bộ nhớ tạm (clipboard) không bị treo vĩnh viễn; bảo vệ người dùng trước các bẫy phishing trên web.
+- **Những gì GenPass KHÔNG THỂ chống**: Nếu máy tính của bạn đã bị nhiễm phần mềm gián điệp, Trojan, RAT hoặc Keylogger cấp hệ điều hành, các phần mềm độc hại đó chạy cùng quyền với tài khoản người dùng và có thể chụp màn hình, ghi lại phím bấm khi bạn nhập mật khẩu chính, hoặc quét trực tiếp bộ nhớ RAM của tiến trình Chrome khi kho đang mở khóa. Để phòng chống virus, người dùng bắt buộc cần duy trì hệ điều hành cập nhật và sử dụng giải pháp chống mã độc chuyên dụng ở cấp hệ thống.
 
 ### Tự động điền
 - Chỉ điền khi host của mục đã lưu khớp host của trang đang mở (không tính tiền tố `www.`) và ô nhập đang hiện hình.
@@ -187,6 +202,29 @@ GenPass chỉ yêu cầu các quyền hạn cần thiết tối thiểu theo chu
 
 ### Ghi chú nâng cấp từ vault v1
 - Vault v1 (PBKDF2) chỉ tồn tại trong quá trình phát triển. Blob v1 cũ bị từ chối với lỗi `GPVAULT_BAD_BLOB`. Đây là hành vi có chủ đích: dữ liệu cũ cần mở kho và lưu lại bằng vault v2.
+
+---
+
+## Ủng hộ dự án (Donation & Support)
+
+GenPass là dự án mã nguồn mở phi lợi nhuận, hoàn toàn miễn phí và không chèn quảng cáo. Nếu GenPass giúp ích cho công việc và sự an toàn số của bạn, bạn có thể ủng hộ tác giả để duy trì và phát triển dự án lâu dài:
+
+- **Mã nguồn chính thức trên GitHub**: [github.com/lengoctuong2005/GenPass](https://github.com/lengoctuong2005/GenPass)
+- **Chuyển khoản ngân hàng (VietQR Napas 24/7)**:
+  - **Ngân hàng**: Techcombank
+  - **Số tài khoản**: `1005555555555`
+  - **Chủ tài khoản**: `LE NGOC TUONG`
+  - **Nội dung chuyển khoản**: `GenPass Ung Ho`
+  - **Mã quét VietQR**: Quét trực tiếp trong tab **Ủng hộ** của tiện ích hoặc mở ảnh tại `https://img.vietqr.io/image/TCB-1005555555555-qr_only.png?amount=0&addInfo=GenPass%20Ung%20Ho&accountName=LE%20NGOC%20TUONG`
+
+---
+
+## Đề xuất tính năng phát triển tiếp theo (Future Roadmap)
+
+1. **Bộ khôi phục khẩn cấp (Emergency Recovery Kit)**: Tạo bản in PDF một trang chứa mã khóa khẩn cấp và hướng dẫn phục hồi tài khoản để người dùng cất giữ trong két an toàn.
+2. **Kiểm tra rò rỉ dữ liệu ngoại tuyến (Offline Breach Check)**: Đối chiếu mật khẩu đã lưu với cơ sở dữ liệu vi phạm dữ liệu (Data Breaches) thông qua mô hình k-Anonymity SHA-1 prefix của Have I Been Pwned mà không làm lộ mật khẩu thật.
+3. **Sao lưu kho mã hóa độc lập (.genpass backup)**: Cho phép xuất toàn bộ cơ sở dữ liệu kho dưới dạng file blob nhị phân được mã hóa bởi mật khẩu riêng biệt để đồng bộ an toàn qua các thiết bị ngoại vi.
+4. **Tự khóa khi máy tính ở trạng thái rảnh rỗi / Sleep**: Tích hợp `chrome.idle` API để khóa kho ngay khi màn hình máy tính tắt hoặc người dùng rời khỏi bàn làm việc.
 
 ---
 
