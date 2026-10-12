@@ -821,10 +821,309 @@
     }
   });
 
-  // Init badges on document idle / load
+  // --- Goi y mat khau manh khi dang ky (Google Password Manager style) ---
+  const SUGGEST_I18N = {
+    vi: {
+      title: "GenPass đã tạo mật khẩu mạnh cho trang web này",
+      body: "Bạn không cần nhớ mật khẩu này. Nó sẽ được lưu vào GenPass cho {who}.",
+      btnOwn: "Tự nhập",
+      btnUse: "Dùng mật khẩu mạnh",
+      savedToast: "GenPass: Đã lưu mật khẩu mới cho {domain}!",
+      reusedToast: "GenPass: Mật khẩu này đã có trong kho!",
+      lockedToast: "GenPass: Kho đang khóa, mở popup và nhập PIN để lưu mật khẩu!"
+    },
+    en: {
+      title: "GenPass created a strong password for this website",
+      body: "You won't need to remember this password. It will be saved to GenPass for {who}.",
+      btnOwn: "Choose your own",
+      btnUse: "Use strong password",
+      savedToast: "GenPass: Saved the new password for {domain}!",
+      reusedToast: "GenPass: This password is already in the vault!",
+      lockedToast: "GenPass: Vault is locked. Open the popup and enter your PIN to save the password!"
+    }
+  };
+
+  const SUGGEST_POOLS = {
+    std: "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*()-_=+",
+    alphanum: "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789",
+    upper: "ABCDEFGHJKLMNPQRSTUVWXYZ",
+    lower: "abcdefghijkmnpqrstuvwxyz",
+    numbers: "23456789",
+    special: "!@#$%^&*()-_=+"
+  };
+
+  const SUGGEST_NEW_PASSWORD_RE = /(new[-_ ]?password|new[-_ ]?pass|password[-_ ]?new|mat[-_ ]?khau[-_ ]?moi)/i;
+  const SUGGEST_CONFIRM_RE = /(confirm|retype|repeat|verify|nhap lai|nhập lại|xac nhan|xác nhận)/i;
+  const SUGGEST_SIGNUP_RE = /(sign ?up|register|create account|tạo tài khoản|tao tai khoan|đăng ký|dang ky)/i;
+
+  let activeSuggestBubble = null;
+
+  // Cryptographically secure random integer in [0, max - 1] with rejection sampling (zero modulo bias)
+  function secureRandomInt(max) {
+    if (max <= 0) return 0;
+    const limit = Math.floor(0x100000000 / max) * max;
+    const buf = new Uint32Array(1);
+    do {
+      crypto.getRandomValues(buf);
+    } while (buf[0] >= limit);
+    return buf[0] % max;
+  }
+
+  // Fisher-Yates shuffle with CSPRNG
+  function secureShuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = secureRandomInt(i + 1);
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  // Sinh mat khau manh theo dung tuy chon nguoi dung chon o popup (gon lai, khong can pool theo tung lop)
+  function generateStrongSuggestion(opts) {
+    const o = opts || {};
+    const length = Math.min(64, Math.max(12, parseInt(o.length, 10) || 16));
+    const wantSpecial = o.special !== false;
+    const useUpper = o.upper !== false;
+    const useLower = o.lower !== false;
+    const useNumbers = o.numbers !== false;
+
+    const classPools = [];
+    if (useUpper) classPools.push(SUGGEST_POOLS.upper);
+    if (useLower) classPools.push(SUGGEST_POOLS.lower);
+    if (useNumbers) classPools.push(SUGGEST_POOLS.numbers);
+    if (wantSpecial) classPools.push(SUGGEST_POOLS.special);
+    if (classPools.length === 0) classPools.push(SUGGEST_POOLS.lower);
+
+    const chars = classPools.map(pool => pool[secureRandomInt(pool.length)]);
+    const combined = wantSpecial ? SUGGEST_POOLS.std : SUGGEST_POOLS.alphanum;
+
+    while (chars.length < length) {
+      chars.push(combined[secureRandomInt(combined.length)]);
+    }
+
+    return secureShuffle(chars).join("");
+  }
+
+  function suggestAttrText(el) {
+    const aria = (el.getAttribute && el.getAttribute("aria-label")) || "";
+    return `${el.name || ""} ${el.id || ""} ${el.placeholder || ""} ${aria}`;
+  }
+
+  function suggestScopePasswords(el) {
+    // ponytail: chi quet trong form cua chinh o do; trang khong co form thi nho text signup o duoi.
+    if (!el.form || !el.form.querySelectorAll) return [];
+    return Array.from(el.form.querySelectorAll('input[type="password"]'));
+  }
+
+  // Truong hop dung: o mat khau moi trong form dang ky. Form dang nhap khong thu khi o do la current-password.
+  function looksLikeNewPasswordField(el) {
+    if (!el) return false;
+    if (el.type !== "password") return false;
+    if (el.value) return false;
+    if ((el.autocomplete || "").toLowerCase() === "current-password") return false;
+
+    if (["new-password", "new_password"].includes((el.autocomplete || "").toLowerCase())) return true;
+    if (SUGGEST_NEW_PASSWORD_RE.test(suggestAttrText(el))) return true;
+
+    const passInputs = suggestScopePasswords(el);
+    if (passInputs.length >= 2) {
+      const hasConfirmSibling = passInputs.some(other => other !== el && SUGGEST_CONFIRM_RE.test(suggestAttrText(other)));
+      if (hasConfirmSibling || passInputs[0] === el) return true;
+    }
+
+    let text = "";
+    try {
+      const scope = (el.closest && el.closest("form")) || (typeof document !== "undefined" && document.body);
+      text = (scope && scope.textContent) || "";
+    } catch (err) {
+      text = "";
+    }
+    // Chi goi y khi o trong: nguoi dung da go hoac trang da dien san thi thoi
+    return el.value === "" && SUGGEST_SIGNUP_RE.test(text);
+  }
+
+  function findSuggestConfirmField(passInput) {
+    const passInputs = suggestScopePasswords(passInput);
+    return passInputs.find(other => other !== passInput && SUGGEST_CONFIRM_RE.test(suggestAttrText(other))) || null;
+  }
+
+  // An bubble; that bai thi cung khong duoc xoa mat khau da dien trong o
+  function closeSuggestBubble() {
+    if (!activeSuggestBubble) return;
+    const ctx = activeSuggestBubble;
+    activeSuggestBubble = null;
+    clearTimeout(ctx.autoCloseTimer);
+    document.removeEventListener("mousedown", ctx.onOutsideDown, true);
+    document.removeEventListener("keydown", ctx.onKeyDown, true);
+    window.removeEventListener("scroll", ctx.updatePosition, true);
+    window.removeEventListener("resize", ctx.updatePosition);
+    ctx.node.remove();
+  }
+
+  function showSuggestBubble(passInput, suggestion, confirmField, lang) {
+    if (!document.body) return;
+    if (activeSuggestBubble) closeSuggestBubble();
+
+    const t = SUGGEST_I18N[lang] || SUGGEST_I18N.vi;
+    const domain = extractDomain();
+    const username = findUsernameInput(passInput);
+    const who = username || domain;
+
+    const node = document.createElement("div");
+    node.id = "genpass-suggest-bubble";
+    node.innerHTML = `
+      <div class="gps-head">
+        <svg class="gps-icon" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 6c1.66 0 3 1.34 3 3 0 1.09-.59 2.04-1.46 2.56L14 15h-4v-2.44A2.99 2.99 0 0 1 9 10c0-1.66 1.34-3 3-3z"/></svg>
+        <span class="gps-title">${escapeHtml(t.title)}</span>
+      </div>
+      <div class="gps-body">${escapeHtml(t.body.replace("{who}", who))}</div>
+      <div class="gps-actions">
+        <button type="button" class="gps-btn gps-btn-own">${escapeHtml(t.btnOwn)}</button>
+        <button type="button" class="gps-btn gps-btn-use">${escapeHtml(t.btnUse)}</button>
+      </div>
+    `;
+
+    function updatePosition() {
+      const rect = passInput.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) {
+        node.style.display = "none";
+        return;
+      }
+      node.style.display = "block";
+      const height = node.offsetHeight || 0;
+      const flipUp = rect.bottom + height + 16 > window.innerHeight && rect.top - height - 8 > 8;
+      const top = flipUp ? rect.top - height - 8 : rect.bottom + 8;
+      const maxLeft = Math.max(8, window.innerWidth - 328);
+      node.style.top = `${Math.round(Math.max(8, top))}px`;
+      node.style.left = `${Math.round(Math.min(maxLeft, Math.max(8, rect.left)))}px`;
+    }
+
+    const ctx = {
+      node,
+      passInput,
+      suggestion,
+      updatePosition,
+      autoCloseTimer: null,
+      onKeyDown: null,
+      onOutsideDown: null
+    };
+
+    // Esc va click ra ngoai: dong bubble nhung khong huy mat khau da dien
+    ctx.onKeyDown = (e) => {
+      if (e.key === "Escape" && activeSuggestBubble === ctx) closeSuggestBubble();
+    };
+    ctx.onOutsideDown = (e) => {
+      if (activeSuggestBubble !== ctx) return;
+      if (node.contains(e.target)) return;
+      closeSuggestBubble();
+    };
+
+    node.querySelector(".gps-btn-own").addEventListener("click", () => {
+      setNativeValue(passInput, "");
+      if (confirmField && confirmField !== passInput) setNativeValue(confirmField, "");
+      passInput.dataset.genpassSuggestDismissed = "1";
+      passInput.focus();
+      closeSuggestBubble();
+    });
+
+    node.querySelector(".gps-btn-use").addEventListener("click", () => {
+      gpGet(["genHistory"], (res) => {
+        const history = Array.isArray(res.genHistory) ? res.genHistory : [];
+        const already = history.some(h => h.password === suggestion && (h.name === domain || (h.url || "").includes(domain)));
+        if (!already) {
+          const newItem = {
+            id: Date.now().toString(),
+            name: domain,
+            username: username,
+            tag: "",
+            url: window.location.href,
+            password: suggestion,
+            length: suggestion.length,
+            createdAt: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) + " " + new Date().toLocaleDateString("vi-VN")
+          };
+          history.unshift(newItem);
+          if (history.length > 200) history.pop();
+          gpSet({ genHistory: history }, (res) => {
+            // Vault dang kho thi ghi that bai ({ ok: false, locked: true }), bao that cho nguoi dung
+            showInPageToast((res && res.locked ? t.lockedToast : t.savedToast.replace("{domain}", domain)));
+          });
+        } else {
+          showInPageToast(t.reusedToast);
+        }
+        closeSuggestBubble();
+      });
+    });
+
+    try {
+      document.body.appendChild(node);
+      updatePosition();
+      activeSuggestBubble = ctx;
+      document.addEventListener("mousedown", ctx.onOutsideDown, true);
+      document.addEventListener("keydown", ctx.onKeyDown, true);
+      window.addEventListener("scroll", ctx.updatePosition, true);
+      window.addEventListener("resize", ctx.updatePosition);
+      ctx.autoCloseTimer = setTimeout(() => {
+        if (activeSuggestBubble === ctx) closeSuggestBubble();
+      }, 30000);
+    } catch (err) {
+      console.warn("Suggest bubble failed:", err);
+      closeSuggestBubble();
+    }
+  }
+
+  // Khong tu dien vao o nguoi dung da go / o da co san
+  function initSuggestPassword() {
+    document.addEventListener("focusin", (e) => {
+      const el = e.target;
+      if (!(el instanceof HTMLInputElement) || el.type !== "password") return;
+      if (el.value !== "" || el.dataset.genpassSuggestDismissed) return;
+      if (activeSuggestBubble && activeSuggestBubble.passInput === el) return;
+      if (!looksLikeNewPasswordField(el)) return;
+
+      gpGet(["genOptions"], (res) => {
+        if (res.genOptions && res.genOptions.suggestStrongPassword === false) return;
+        if (el.value !== "") return;
+
+        const suggestion = generateStrongSuggestion(res.genOptions || {});
+        setNativeValue(el, suggestion);
+
+        let confirmField = findSuggestConfirmField(el);
+        if (confirmField && confirmField.value === "") {
+          setNativeValue(confirmField, suggestion);
+        } else {
+          confirmField = null;
+        }
+
+        const lang = (res.genOptions && res.genOptions.lang) || (typeof navigator !== "undefined" ? navigator.language : "");
+        showSuggestBubble(el, suggestion, confirmField, lang);
+
+        if (!el.dataset.genpassSuggestBound) {
+          el.dataset.genpassSuggestBound = "1";
+          el.addEventListener("input", () => {
+            if (activeSuggestBubble && activeSuggestBubble.passInput === el && el.value !== activeSuggestBubble.suggestion) {
+              closeSuggestBubble();
+            }
+          });
+        }
+      });
+    }, true);
+
+    document.addEventListener("focusout", (e) => {
+      const el = e.target;
+      if (el instanceof HTMLInputElement && el.type === "password" && el.dataset) {
+        delete el.dataset.genpassSuggestDismissed;
+      }
+    });
+  }
+
+  // Init badges + suggest password on document idle / load
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initAutoFillBadges);
+    document.addEventListener("DOMContentLoaded", () => {
+      initAutoFillBadges();
+      initSuggestPassword();
+    });
   } else {
     initAutoFillBadges();
+    initSuggestPassword();
   }
 })();

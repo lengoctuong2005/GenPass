@@ -249,3 +249,112 @@
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25) !important;
   animation: genpassSlideIn 0.2s ease !important;
 }
+
+/* GenPass Suggest Strong Password Bubble */
+#genpass-suggest-bubble {
+  all: initial;
+  position: fixed !important;
+  z-index: 2147483646 !important;
+  width: 320px !important;
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 12px !important;
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2) !important;
+  padding: 12px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  animation: genpassSlideIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#genpass-suggest-bubble * {
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+}
+
+#genpass-suggest-bubble .gps-head {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 8px !important;
+}
+
+#genpass-suggest-bubble .gps-icon,
+#genpass-suggest-bubble .gps-title {
+  font-size: 12px !important;
+}
+
+#genpass-suggest-bubble .gps-icon {
+  width: 16px !important;
+  height: 16px !important;
+  fill: #175ddc !important;
+  flex-shrink: 0 !important;
+}
+
+#genpass-suggest-bubble .gps-title {
+  font-weight: 700 !important;
+  color: #175ddc !important;
+}
+
+#genpass-suggest-bubble .gps-body {
+  color: #475569 !important;
+}
+
+#genpass-suggest-bubble .gps-actions {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+}
+
+#genpass-suggest-bubble .gps-btn {
+  padding: 6px 12px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  border: 1px solid transparent !important;
+  transition: all 0.15s ease !important;
+}
+
+#genpass-suggest-bubble .gps-btn-own,
+#genpass-suggest-bubble .gps-btn-use {
+  background: #175ddc !important;
+  color: #ffffff !important;
+}
+
+#genpass-suggest-bubble .gps-btn-own {
+  background: transparent !important;
+  color: #175ddc !important;
+  border-color: #175ddc !important;
+}
+
+#genpass-suggest-bubble .gps-btn-use:hover {
+  background: #1248ab !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  #genpass-suggest-bubble {
+    color: #f8fafc !important;
+    background: #1e293b !important;
+    border-color: #334155 !important;
+  }
+  #genpass-suggest-bubble .gps-icon,
+  #genpass-suggest-bubble .gps-title {
+    color: #60a5fa !important;
+    fill: #60a5fa !important;
+  }
+  #genpass-suggest-bubble .gps-body {
+    color: #94a3b8 !important;
+  }
+  #genpass-suggest-bubble .gps-btn-own {
+    color: #93c5fd !important;
+    border-color: #60a5fa !important;
+  }
+  #genpass-suggest-bubble .gps-btn-use {
+    background: #3b82f6 !important;
+    color: #ffffff !important;
+  }
+}

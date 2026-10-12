@@ -235,6 +235,7 @@ document.addEventListener("DOMContentLoaded", () => {
     optAvoidAmbiguous: document.getElementById("opt-avoid-ambiguous"),
     optAutoSavePrompt: document.getElementById("opt-autosave-prompt"),
     optAutoFill: document.getElementById("opt-autofill"),
+    optSuggestPassword: document.getElementById("opt-suggest-password"),
     minNumbers: document.getElementById("min-numbers"),
     minSpecial: document.getElementById("min-special"),
     historyList: document.getElementById("history-list"),
@@ -633,7 +634,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderAbout() {
     if (!els.viewAbout) return;
-    const version = (typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version) || "1.2.0";
+    const version = (typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version) || "1.3.0";
     if (els.aboutVersion) {
       els.aboutVersion.textContent = `v${version} · MIT`;
     }
@@ -1205,6 +1206,7 @@ document.addEventListener("DOMContentLoaded", () => {
       avoidAmbiguous: els.optAvoidAmbiguous.checked,
       autoSavePrompt: els.optAutoSavePrompt.checked,
       autoFillBadge: els.optAutoFill.checked,
+      suggestStrongPassword: els.optSuggestPassword.checked,
       minNumbers: parseInt(els.minNumbers.value, 10) || 0,
       minSpecial: parseInt(els.minSpecial.value, 10) || 0,
       passphraseWords: parseInt(els.passphraseWordsRange?.value, 10) || 4,
@@ -1627,6 +1629,7 @@ document.addEventListener("DOMContentLoaded", () => {
           els.optAvoidAmbiguous.checked = !!o.avoidAmbiguous;
           els.optAutoSavePrompt.checked = o.autoSavePrompt !== false;
           els.optAutoFill.checked = o.autoFillBadge !== false;
+          els.optSuggestPassword.checked = o.suggestStrongPassword !== false;
           if (els.optAutoClearClipboard) {
             els.optAutoClearClipboard.checked = o.autoClearClipboard !== false;
           }
@@ -2532,6 +2535,11 @@ document.addEventListener("DOMContentLoaded", () => {
   els.optAutoFill.addEventListener("change", () => {
     saveOptions(getOptions());
     showToast(els.optAutoFill.checked ? "Đã bật gợi ý tự động điền!" : "Đã tắt gợi ý tự động điền!");
+  });
+
+  els.optSuggestPassword.addEventListener("change", () => {
+    saveOptions(getOptions());
+    showToast(els.optSuggestPassword.checked ? "Đã bật gợi ý mật khẩu mạnh khi đăng ký!" : "Đã tắt gợi ý mật khẩu mạnh khi đăng ký!");
   });
 
   els.refresh.addEventListener("click", () => {
