@@ -634,7 +634,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function renderAbout() {
     if (!els.viewAbout) return;
-    const version = (typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version) || "1.3.0";
+    const version = (typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version) || "1.3.1";
     if (els.aboutVersion) {
       els.aboutVersion.textContent = `v${version} · MIT`;
     }
@@ -3745,6 +3745,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Cookie Management (Multi-Account & Session Switcher) ---
   function prepareCookieForSet(targetUrl, c) {
     let cleanUrl = targetUrl;
+    // Cookie host-only thuong ve mot host cu the (vi du app.cline.bot), co the
+    // khac host cua trang dang mo. Set tren dung host cua cookie, neu khong
+    // no se roi sang site khac va phien khong bao gio kich hoat.
+    if (c.hostOnly && c.domain) {
+      const host = c.domain.replace(/^\./, "");
+      const scheme = targetUrl && targetUrl.startsWith("http://") ? "http" : "https";
+      cleanUrl = scheme + "://" + host;
+    }
     if (!cleanUrl || (!cleanUrl.startsWith("http://") && !cleanUrl.startsWith("https://"))) {
       const cleanDomain = c.domain ? c.domain.replace(/^\./, "") : "example.com";
       cleanUrl = `https://${cleanDomain}`;
@@ -4015,25 +4023,73 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const cookies = Array.isArray(profile.cookies) ? profile.cookies : [];
       let successCount = 0;
+      let failCount = 0;
       for (const c of cookies) {
         try {
           const clean = prepareCookieForSet(targetUrl, c);
           await chrome.cookies.set(clean);
           successCount++;
         } catch (e) {
-          console.warn("Cookie set error:", e);
+          failCount++;
+          console.warn("Cookie set error:", c.name, e);
         }
       }
 
+      // SPA (Clerk, Firebase...) cache danh tinh KHONG CHI o localStorage:
+      // con trong IndexedDB, CacheStorage, Service Worker... Doi cookie khong
+      // du, phai xoa sach client storage cua origin dich truoc khi nap trang,
+      // khong trang se doc lai cache cu va van hien tai khoan cu.
+      const wipeSiteData = async (urlStr, sameOriginTabId) => {
+        let origin = null;
+        try { origin = new URL(urlStr).origin; } catch (e) { origin = null; }
+        const tasks = [];
+        // 1) Xoa nhanh storage cua tab dang mo (cung origin) truoc khi reload
+        if (sameOriginTabId && chrome.scripting?.executeScript) {
+          tasks.push(
+            chrome.scripting.executeScript({
+              target: { tabId: sameOriginTabId },
+              func: () => { try { localStorage.clear(); sessionStorage.clear(); } catch (e) { /* trang chan storage */ } }
+            }).catch(() => null)
+          );
+        }
+        // 2) Xoa toan bo du lieu origin (IndexedDB, CacheStorage, SW, localStorage...).
+        //    KHONG xoa cookies - cookie vua ap dung phai giu lai.
+        if (origin && chrome.browsingData?.remove) {
+          tasks.push(new Promise((resolve) => {
+            try {
+              chrome.browsingData.remove(
+                { origins: [origin] },
+                {
+                  localStorage: true, indexedDB: true, cacheStorage: true, cache: true,
+                  serviceWorkers: true, fileSystems: true, webSQL: true,
+                  cookies: false, history: false, passwords: false, formData: false, downloads: false
+                },
+                () => resolve()
+              );
+            } catch (e) { console.warn("Khong xoa duoc du lieu origin:", e); resolve(); }
+          }));
+        }
+        await Promise.all(tasks);
+      };
+
       // If already on the same domain, reload it. If on another domain (e.g. on Telegram while switching Facebook), open/navigate!
       if (activeTab?.id) {
-        if (currentTabDomain && targetDomain && (currentTabDomain === targetDomain || currentTabDomain.includes(targetDomain) || targetDomain.includes(currentTabDomain))) {
-          chrome.tabs.reload(activeTab.id);
+        const sameDomain = !!(currentTabDomain && targetDomain &&
+          (currentTabDomain === targetDomain || currentTabDomain.includes(targetDomain) || targetDomain.includes(currentTabDomain)));
+        if (sameDomain) {
+          // Xoa storage truoc, roi reload: trang khoi dong lai tu cookie moi
+          wipeSiteData(targetUrl, activeTab.id).then(() => chrome.tabs.reload(activeTab.id));
         } else if (chrome?.tabs?.create) {
-          chrome.tabs.create({ url: targetUrl });
+          // Xoa storage origin dich TRUOC khi mo tab: lan load dau tien
+          // trang da doc cookie moi va khong con cache cu.
+          wipeSiteData(targetUrl, null).then(() => chrome.tabs.create({ url: targetUrl }));
         }
       }
-      showToast(`Đã chuyển sang phiên "${profile.profileName}" (${successCount} cookies)!`);
+      showToast(
+        failCount > 0
+          ? `Đã chuyển sang phiên "${profile.profileName}" (${successCount} cookies, thất bại ${failCount})!`
+          : `Đã chuyển sang phiên "${profile.profileName}" (${successCount} cookies)!`
+      );
     });
   }
 
@@ -4075,7 +4131,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const domain = extractDomain(activeTab.url);
-        chrome.cookies.getAll({ url: activeTab.url }, (cookies) => {
+        // Luu cookie cua CAY domain, khong chi URL dang mo: nhieu trang
+        // (Clerk, app.cline.bot...) dat cookie host-only tren subdomain khac,
+        // neu chi lay theo url hien tai phien luu se thieu va khong bao gio
+        // khoi phuc duoc dang nhap.
+        chrome.cookies.getAll({ domain }, (cookies) => {
           if (!cookies || cookies.length === 0) {
             showToast("Trang web hiện tại không có cookie nào!");
             return;
@@ -4149,12 +4209,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
         chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
           const activeTab = tabs?.[0];
-          const domain = activeTab?.url ? extractDomain(activeTab.url) : "imported";
+          // Domain cua PHIEN lay tu chinh cookie (ca host-only), khong lay theo tab dang mo.
+          // Neu import khi dang mo site khac, domain/url se sai va lan bam
+          // "Chuyen sang phien nay" se set cookie vao site nguoc.
+          const activeDomain = activeTab?.url ? extractDomain(activeTab.url) : "";
+          const cookieDomains = cookiesList
+            .map((c) => c.domain ? c.domain.replace(/^\./, "") : "")
+            .filter(Boolean)
+            .sort((a, b) => a.split(".").length - b.split(".").length);
+          const derivedDomain = cookieDomains[0] || activeDomain || "imported";
+          const sameHost = !!activeDomain && (derivedDomain === activeDomain || derivedDomain.endsWith("." + activeDomain));
+          const profileUrl = sameHost && activeTab?.url
+            ? activeTab.url
+            : (derivedDomain && derivedDomain !== "imported" ? `https://${derivedDomain}/` : (activeTab?.url || ""));
           const newProfile = {
             id: Date.now().toString(),
             profileName: `Nhập JSON (${cookiesList.length} cookies)`,
-            domain,
-            url: activeTab?.url || "",
+            domain: derivedDomain,
+            url: profileUrl,
             cookies: cookiesList,
             cookieCount: cookiesList.length,
             createdAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN")
@@ -4163,21 +4235,29 @@ document.addEventListener("DOMContentLoaded", () => {
           currentCookieProfiles.unshift(newProfile);
           saveCookieProfiles();
 
-          if (activeTab?.url && chrome?.cookies?.set) {
+          if (profileUrl && chrome?.cookies?.set) {
             let successCount = 0;
+            let failCount = 0;
             for (const c of cookiesList) {
               try {
-                const clean = prepareCookieForSet(activeTab.url, c);
+                const clean = prepareCookieForSet(profileUrl, c);
                 await chrome.cookies.set(clean);
                 successCount++;
               } catch (e) {
-                console.warn("Cookie set error:", e);
+                failCount++;
+                console.warn("Cookie set error:", c.name, e);
               }
             }
-            if (chrome?.tabs?.reload && activeTab.id) {
+            showToast(
+              failCount > 0
+                ? `Đã nhập & áp dụng ${successCount} cookies vào ${derivedDomain} (thất bại ${failCount})!`
+                : `Đã nhập & áp dụng ${successCount} cookies vào ${derivedDomain}!`
+            );
+            // Chi reload neu dang dung tren host do; neu khong, de nguoi dung
+            // tu bam "Chuyen sang phien nay" de mo trang dich.
+            if (sameHost && chrome?.tabs?.reload && activeTab.id) {
               chrome.tabs.reload(activeTab.id);
             }
-            showToast(`Đã nhập & áp dụng ${successCount} cookies vào trang!`);
           } else {
             showToast(`Đã lưu hồ sơ ${cookiesList.length} cookies!`);
           }
