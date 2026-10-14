@@ -358,3 +358,136 @@
     color: #ffffff !important;
   }
 }
+
+/* GenPass Quick Snippets / Text Expansion Bubble */
+#genpass-snippet-bubble {
+  all: initial;
+  position: fixed !important;
+  z-index: 2147483646 !important;
+  width: 320px !important;
+  max-width: calc(100vw - 32px) !important;
+  box-sizing: border-box !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+  font-size: 12px !important;
+  color: #0f172a !important;
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 10px !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2) !important;
+  padding: 8px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  animation: genpassSlideIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+#genpass-snippet-bubble * {
+  box-sizing: border-box !important;
+  font-family: inherit !important;
+}
+
+#genpass-snippet-bubble .gpb-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 4px 6px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  color: #175ddc !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  margin-bottom: 2px !important;
+}
+
+#genpass-snippet-bubble .gpb-header svg {
+  width: 14px !important;
+  height: 14px !important;
+  fill: #175ddc !important;
+  flex-shrink: 0 !important;
+}
+
+#genpass-snippet-bubble .gpb-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  gap: 8px !important;
+  transition: background-color 0.12s ease !important;
+}
+
+#genpass-snippet-bubble .gpb-item:hover,
+#genpass-snippet-bubble .gpb-item.active {
+  background: #f1f5f9 !important;
+}
+
+#genpass-snippet-bubble .gpb-item-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  flex: 1 !important;
+}
+
+#genpass-snippet-bubble .gpb-badge {
+  background: #e0e7ff !important;
+  color: #4338ca !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 2px 5px !important;
+  border-radius: 4px !important;
+  font-family: monospace !important;
+  flex-shrink: 0 !important;
+}
+
+#genpass-snippet-bubble .gpb-text {
+  font-size: 12px !important;
+  color: #0f172a !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#genpass-snippet-bubble .gpb-label {
+  font-size: 11px !important;
+  color: #64748b !important;
+  flex-shrink: 0 !important;
+}
+
+#genpass-snippet-bubble .gpb-footer {
+  font-size: 10px !important;
+  color: #94a3b8 !important;
+  padding: 4px 6px 2px !important;
+  text-align: right !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  #genpass-snippet-bubble {
+    background: #1e293b !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+  }
+  #genpass-snippet-bubble .gpb-header {
+    border-bottom-color: #334155 !important;
+    color: #60a5fa !important;
+  }
+  #genpass-snippet-bubble .gpb-header svg {
+    fill: #60a5fa !important;
+  }
+  #genpass-snippet-bubble .gpb-item:hover,
+  #genpass-snippet-bubble .gpb-item.active {
+    background: #334155 !important;
+  }
+  #genpass-snippet-bubble .gpb-badge {
+    background: #312e81 !important;
+    color: #a5b4fc !important;
+  }
+  #genpass-snippet-bubble .gpb-text {
+    color: #f8fafc !important;
+  }
+  #genpass-snippet-bubble .gpb-label {
+    color: #94a3b8 !important;
+  }
+}

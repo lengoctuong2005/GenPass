@@ -328,6 +328,7 @@ document.addEventListener("DOMContentLoaded", () => {
     inputSearchHistory: document.getElementById("input-search-history"),
     btnClearSearch: document.getElementById("btn-clear-search"),
     optAutoClearClipboard: document.getElementById("opt-auto-clear-clipboard"),
+    optSnippets: document.getElementById("opt-snippets"),
     tabCards: document.getElementById("tab-cards"),
     viewCards: document.getElementById("view-cards"),
     countCards: document.getElementById("count-cards"),
@@ -373,6 +374,19 @@ document.addEventListener("DOMContentLoaded", () => {
     btnClearCookiesSearch: document.getElementById("btn-clear-cookies-search"),
     cookiesFilterBar: document.getElementById("cookies-filter-bar"),
     listCookieProfiles: document.getElementById("list-cookie-profiles"),
+    tabSnippets: document.getElementById("tab-snippets"),
+    viewSnippets: document.getElementById("view-snippets"),
+    countSnippets: document.getElementById("count-snippets"),
+    btnToggleAddSnippet: document.getElementById("btn-toggle-add-snippet"),
+    cardAddSnippet: document.getElementById("card-add-snippet"),
+    inputSnippetShortcut: document.getElementById("input-snippet-shortcut"),
+    inputSnippetValue: document.getElementById("input-snippet-value"),
+    inputSnippetLabel: document.getElementById("input-snippet-label"),
+    btnCancelSnippet: document.getElementById("btn-cancel-snippet"),
+    btnSaveSnippet: document.getElementById("btn-save-snippet"),
+    inputSearchSnippets: document.getElementById("input-search-snippets"),
+    btnClearSnippetsSearch: document.getElementById("btn-clear-snippets-search"),
+    listSnippets: document.getElementById("list-snippets"),
     vaultLock: document.getElementById("vault-lock"),
     vaultPin: document.getElementById("vault-pin"),
     vaultUnlockBtn: document.getElementById("vault-unlock-btn"),
@@ -428,6 +442,14 @@ document.addEventListener("DOMContentLoaded", () => {
   let current2FA = [];
   let currentCards = [];
   let currentCookieProfiles = [];
+  let currentSnippets = [];
+  let editingSnippetId = null;
+  let currentSnippetsSearchQuery = "";
+  const DEFAULT_SNIPPETS = [
+    { id: "s1", shortcut: "eml", value: "email@example.com", label: "Email cá nhân" },
+    { id: "s2", shortcut: "sdt", value: "0912345678", label: "Số điện thoại" },
+    { id: "s3", shortcut: "dc", value: "Hà Nội, Việt Nam", label: "Địa chỉ" }
+  ];
   let currentCookiesSearchQuery = "";
   let editingCardId = null;
   let currentCardsSearchQuery = "";
@@ -480,6 +502,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "tabs.generator": "Mật khẩu",
       "tabs.history": "Lịch sử",
       "tabs.cards": "Thanh toán",
+      "tabs.snippets": "Gõ tắt",
       "tabs.about": "Ủng hộ",
       "vault.lockTitle": "Kho đã khóa",
       "vault.lockSub": "Nhập mã PIN hoặc mật khẩu để mở kho",
@@ -539,6 +562,16 @@ document.addEventListener("DOMContentLoaded", () => {
       "cookies.import": "Nhập",
       "cookies.export": "Xuất",
       "cookies.logout": "Đăng xuất",
+      "snippets.title": "Từ gõ tắt & Mẫu nhanh",
+      "snippets.addBtn": "+ Thêm gõ tắt",
+      "snippets.shortcutPlaceholder": "Phím tắt (vd: eml, sdt, /mail...)",
+      "snippets.valuePlaceholder": "Nội dung mở rộng (vd: email, số điện thoại, địa chỉ...)",
+      "snippets.labelPlaceholder": "Nhãn / Mô tả (vd: Email cá nhân...)",
+      "snippets.saveBtn": "Lưu",
+      "snippets.cancelBtn": "Hủy",
+      "snippets.searchPlaceholder": "Tìm kiếm từ gõ tắt...",
+      "snippets.empty": "Chưa có từ gõ tắt nào. Bấm '+ Thêm gõ tắt' để tạo mới!",
+      "settings.snippets": "Gợi ý từ gõ tắt khi nhập trên trang web (Text Expansion)",
       "about.title": "GenPass",
       "about.lede": "Trình tạo mật khẩu và xác thực 2FA chạy hoàn toàn trên máy bạn. Không máy chủ, không tài khoản, không theo dõi hành vi.",
       "about.github": "Mã nguồn trên GitHub",
@@ -564,6 +597,7 @@ document.addEventListener("DOMContentLoaded", () => {
       "tabs.generator": "Passwords",
       "tabs.history": "History",
       "tabs.cards": "Payments",
+      "tabs.snippets": "Snippets",
       "tabs.about": "Support",
       "vault.lockTitle": "Vault is Locked",
       "vault.lockSub": "Enter PIN or master password to unlock",
@@ -623,6 +657,16 @@ document.addEventListener("DOMContentLoaded", () => {
       "cookies.import": "Import",
       "cookies.export": "Export",
       "cookies.logout": "Log out",
+      "snippets.title": "Text Expansion & Snippets",
+      "snippets.addBtn": "+ Add Snippet",
+      "snippets.shortcutPlaceholder": "Shortcut (e.g. eml, sdt, /mail...)",
+      "snippets.valuePlaceholder": "Expanded text (e.g. email, phone, address...)",
+      "snippets.labelPlaceholder": "Label / Description (e.g. Personal email...)",
+      "snippets.saveBtn": "Save",
+      "snippets.cancelBtn": "Cancel",
+      "snippets.searchPlaceholder": "Search snippets...",
+      "snippets.empty": "No snippets yet. Click '+ Add Snippet' to create one!",
+      "settings.snippets": "Suggest text expansion snippets when typing on web",
       "about.title": "GenPass",
       "about.lede": "Offline-first password generator and 2FA authenticator running entirely on your machine. No servers, no accounts, zero tracking.",
       "about.github": "Source code on GitHub",
@@ -1269,6 +1313,7 @@ document.addEventListener("DOMContentLoaded", () => {
       autoSavePrompt: els.optAutoSavePrompt.checked,
       autoFillBadge: els.optAutoFill.checked,
       suggestStrongPassword: els.optSuggestPassword.checked,
+      snippetsEnabled: els.optSnippets ? els.optSnippets.checked : true,
       minNumbers: parseInt(els.minNumbers.value, 10) || 0,
       minSpecial: parseInt(els.minSpecial.value, 10) || 0,
       passphraseWords: parseInt(els.passphraseWordsRange?.value, 10) || 4,
@@ -1335,6 +1380,7 @@ document.addEventListener("DOMContentLoaded", () => {
     current2FA = Array.isArray(data.gen2FA) ? data.gen2FA : [];
     currentCards = Array.isArray(data.genCards) ? data.genCards : [];
     currentCookieProfiles = Array.isArray(data.genCookieProfiles) ? data.genCookieProfiles : [];
+    currentSnippets = Array.isArray(data.genSnippets) ? data.genSnippets : (Array.isArray(currentSnippets) && currentSnippets.length ? currentSnippets : [...DEFAULT_SNIPPETS]);
     currentTags = (Array.isArray(data.genTags) && data.genTags.length > 0) ? data.genTags : [...DEFAULT_TAGS];
     vaultKey = keyB64;
     vaultData = {
@@ -1342,6 +1388,7 @@ document.addEventListener("DOMContentLoaded", () => {
       gen2FA: current2FA,
       genCards: currentCards,
       genCookieProfiles: currentCookieProfiles,
+      genSnippets: currentSnippets,
       genTags: currentTags
     };
   }
@@ -1488,7 +1535,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Ghi rac len chuoi plaintext cu truoc khi xoa, han che phuc hoi tu LevelDB
   async function vaultShredPlaintext() {
-    const keys = ["genHistory", "gen2FA", "genCards", "genCookieProfiles", "genTags"];
+    const keys = ["genHistory", "gen2FA", "genCards", "genCookieProfiles", "genSnippets", "genTags"];
     const cur = await chrome.storage.local.get(keys);
     const junk = {};
     keys.forEach(k => {
@@ -1505,6 +1552,7 @@ document.addEventListener("DOMContentLoaded", () => {
       gen2FA: current2FA,
       genCards: currentCards,
       genCookieProfiles: currentCookieProfiles,
+      genSnippets: currentSnippets,
       genTags: currentTags
     };
     const blob = await GPVault.encryptWithPin(payload, secret);
@@ -1532,6 +1580,7 @@ document.addEventListener("DOMContentLoaded", () => {
       gen2FA: data.gen2FA || [],
       genCards: data.genCards || [],
       genCookieProfiles: data.genCookieProfiles || [],
+      genSnippets: data.genSnippets || [],
       genTags: data.genTags || []
     });
     await chrome.storage.local.remove("genVault");
@@ -1684,7 +1733,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function loadOptions(cb) {
     if (chrome?.storage?.local) {
-      chrome.storage.local.get(["genOptions", "genHistory", "genTags", "gen2FA", "genCards", "genCookieProfiles", "genVault"], (res) => {
+      chrome.storage.local.get(["genOptions", "genHistory", "genTags", "gen2FA", "genCards", "genCookieProfiles", "genSnippets", "genVault"], (res) => {
         if (res.genOptions) {
           const o = res.genOptions;
           if (o.lang) applyI18n(o.lang);
@@ -1702,6 +1751,9 @@ document.addEventListener("DOMContentLoaded", () => {
           els.optAutoSavePrompt.checked = o.autoSavePrompt !== false;
           els.optAutoFill.checked = o.autoFillBadge !== false;
           els.optSuggestPassword.checked = o.suggestStrongPassword !== false;
+          if (els.optSnippets) {
+            els.optSnippets.checked = o.snippetsEnabled !== false;
+          }
           if (els.optAutoClearClipboard) {
             els.optAutoClearClipboard.checked = o.autoClearClipboard !== false;
           }
@@ -1787,12 +1839,18 @@ document.addEventListener("DOMContentLoaded", () => {
         if (Array.isArray(res.genCookieProfiles)) {
           currentCookieProfiles = res.genCookieProfiles;
         }
+        if (Array.isArray(res.genSnippets)) {
+          currentSnippets = res.genSnippets;
+        } else {
+          currentSnippets = [...DEFAULT_SNIPPETS];
+        }
         vaultSyncSettings();
         renderTags();
         updateHistoryUI();
         render2FA();
         renderCards();
         renderCookieProfiles();
+        renderSnippets();
         start2FaTicker();
         cb();
       });
@@ -1802,6 +1860,7 @@ document.addEventListener("DOMContentLoaded", () => {
       render2FA();
       renderCards();
       renderCookieProfiles();
+      renderSnippets();
       start2FaTicker();
       cb();
     }
@@ -2660,6 +2719,13 @@ document.addEventListener("DOMContentLoaded", () => {
     showToast(els.optSuggestPassword.checked ? "Đã bật gợi ý mật khẩu mạnh khi đăng ký!" : "Đã tắt gợi ý mật khẩu mạnh khi đăng ký!");
   });
 
+  if (els.optSnippets) {
+    els.optSnippets.addEventListener("change", () => {
+      saveOptions(getOptions());
+      showToast(els.optSnippets.checked ? "Đã bật gợi ý từ gõ tắt!" : "Đã tắt gợi ý từ gõ tắt!");
+    });
+  }
+
   els.refresh.addEventListener("click", () => {
     handleGenerate(false);
     showToast("Đã tạo mật khẩu mới!");
@@ -3251,8 +3317,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Tab switching & smooth auto-scroll on slider
   function switchTab(tabEl, viewEl) {
-    [els.tabGen, els.tabHistory, els.tab2Fa, els.tabCards, els.tabCookies, els.tabAbout].forEach(t => t?.classList.remove("active"));
-    [els.viewGen, els.viewHistory, els.view2Fa, els.viewCards, els.viewCookies, els.viewAbout].forEach(v => v?.classList.remove("active"));
+    [els.tabGen, els.tabHistory, els.tab2Fa, els.tabCards, els.tabCookies, els.tabSnippets, els.tabAbout].forEach(t => t?.classList.remove("active"));
+    [els.viewGen, els.viewHistory, els.view2Fa, els.viewCards, els.viewCookies, els.viewSnippets, els.viewAbout].forEach(v => v?.classList.remove("active"));
     tabEl?.classList.add("active");
     viewEl?.classList.add("active");
 
@@ -3268,6 +3334,8 @@ document.addEventListener("DOMContentLoaded", () => {
       renderCards();
     } else if (viewEl === els.viewCookies) {
       renderCookieProfiles();
+    } else if (viewEl === els.viewSnippets) {
+      renderSnippets();
     } else if (viewEl === els.viewAbout) {
       renderAbout();
     }
@@ -3281,6 +3349,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (els.tabCookies && els.viewCookies) {
     els.tabCookies.addEventListener("click", () => switchTab(els.tabCookies, els.viewCookies));
+  }
+  if (els.tabSnippets && els.viewSnippets) {
+    els.tabSnippets.addEventListener("click", () => switchTab(els.tabSnippets, els.viewSnippets));
   }
   if (els.tabAbout && els.viewAbout) {
     els.tabAbout.addEventListener("click", () => switchTab(els.tabAbout, els.viewAbout));
@@ -4578,6 +4649,206 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // --- Quick Snippets / Text Expansion Management ---
+  function saveSnippets() {
+    if (chrome?.storage?.local) {
+      persistKey("genSnippets", currentSnippets);
+    }
+  }
+
+  function renderSnippets() {
+    if (!els.countSnippets || !els.listSnippets) return;
+    els.countSnippets.textContent = currentSnippets.length;
+    els.listSnippets.innerHTML = "";
+
+    let filtered = currentSnippets;
+    if (currentSnippetsSearchQuery) {
+      const q = currentSnippetsSearchQuery.toLowerCase();
+      filtered = currentSnippets.filter(s => {
+        const sc = (s.shortcut || "").toLowerCase();
+        const val = (s.value || "").toLowerCase();
+        const lbl = (s.label || "").toLowerCase();
+        return sc.includes(q) || val.includes(q) || lbl.includes(q);
+      });
+    }
+
+    if (filtered.length === 0) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = currentSnippetsSearchQuery
+        ? (currentLang === "en" ? `No snippets matching "${currentSnippetsSearchQuery}".` : `Không tìm thấy từ gõ tắt nào khớp với "${currentSnippetsSearchQuery}".`)
+        : (currentLang === "en" ? "No snippets yet. Click '+ Add Snippet' to create one!" : "Chưa có từ gõ tắt nào. Bấm '+ Thêm gõ tắt' để tạo mới!");
+      els.listSnippets.appendChild(empty);
+      return;
+    }
+
+    filtered.forEach(snippet => {
+      const itemEl = document.createElement("div");
+      itemEl.className = "snippet-item";
+
+      const mainEl = document.createElement("div");
+      mainEl.className = "snippet-main";
+
+      const topRow = document.createElement("div");
+      topRow.className = "snippet-top-row";
+
+      const badge = document.createElement("span");
+      badge.className = "snippet-shortcut-badge";
+      badge.textContent = snippet.shortcut;
+      badge.title = "Phím tắt kích hoạt";
+
+      const label = document.createElement("span");
+      label.className = "snippet-label";
+      label.textContent = snippet.label || "";
+
+      topRow.appendChild(badge);
+      if (snippet.label) topRow.appendChild(label);
+
+      const valRow = document.createElement("div");
+      valRow.className = "snippet-value-row";
+      valRow.textContent = snippet.value;
+      valRow.title = "Bấm để sao chép nhanh";
+      valRow.addEventListener("click", () => {
+        navigator.clipboard.writeText(snippet.value);
+        showToast("Đã sao chép nội dung!");
+      });
+
+      mainEl.appendChild(topRow);
+      mainEl.appendChild(valRow);
+
+      const actions = document.createElement("div");
+      actions.className = "snippet-actions";
+
+      // Nut Copy
+      const btnCopy = document.createElement("button");
+      btnCopy.type = "button";
+      btnCopy.className = "btn-icon";
+      btnCopy.title = "Sao chép";
+      btnCopy.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
+      btnCopy.addEventListener("click", () => {
+        navigator.clipboard.writeText(snippet.value);
+        showToast("Đã sao chép nội dung!");
+      });
+
+      // Nut Edit
+      const btnEdit = document.createElement("button");
+      btnEdit.type = "button";
+      btnEdit.className = "btn-icon";
+      btnEdit.title = "Sửa";
+      btnEdit.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+      btnEdit.addEventListener("click", () => {
+        editingSnippetId = snippet.id;
+        if (els.inputSnippetShortcut) els.inputSnippetShortcut.value = snippet.shortcut || "";
+        if (els.inputSnippetValue) els.inputSnippetValue.value = snippet.value || "";
+        if (els.inputSnippetLabel) els.inputSnippetLabel.value = snippet.label || "";
+        if (els.cardAddSnippet) els.cardAddSnippet.hidden = false;
+        if (els.inputSnippetShortcut) els.inputSnippetShortcut.focus();
+      });
+
+      // Nut Delete
+      const btnDel = document.createElement("button");
+      btnDel.type = "button";
+      btnDel.className = "btn-icon danger";
+      btnDel.title = "Xóa";
+      btnDel.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+      btnDel.addEventListener("click", () => {
+        currentSnippets = currentSnippets.filter(s => s.id !== snippet.id);
+        saveSnippets();
+        renderSnippets();
+        showToast("Đã xóa từ gõ tắt!");
+      });
+
+      actions.appendChild(btnCopy);
+      actions.appendChild(btnEdit);
+      actions.appendChild(btnDel);
+
+      itemEl.appendChild(mainEl);
+      itemEl.appendChild(actions);
+
+      els.listSnippets.appendChild(itemEl);
+    });
+  }
+
+  if (els.btnToggleAddSnippet) {
+    els.btnToggleAddSnippet.addEventListener("click", () => {
+      editingSnippetId = null;
+      if (els.inputSnippetShortcut) els.inputSnippetShortcut.value = "";
+      if (els.inputSnippetValue) els.inputSnippetValue.value = "";
+      if (els.inputSnippetLabel) els.inputSnippetLabel.value = "";
+      if (els.cardAddSnippet) {
+        els.cardAddSnippet.hidden = !els.cardAddSnippet.hidden;
+        if (!els.cardAddSnippet.hidden && els.inputSnippetShortcut) {
+          els.inputSnippetShortcut.focus();
+        }
+      }
+    });
+  }
+
+  if (els.btnCancelSnippet) {
+    els.btnCancelSnippet.addEventListener("click", () => {
+      editingSnippetId = null;
+      if (els.cardAddSnippet) els.cardAddSnippet.hidden = true;
+    });
+  }
+
+  if (els.btnSaveSnippet) {
+    els.btnSaveSnippet.addEventListener("click", () => {
+      const shortcut = (els.inputSnippetShortcut?.value || "").trim();
+      const val = (els.inputSnippetValue?.value || "").trim();
+      const label = (els.inputSnippetLabel?.value || "").trim();
+
+      if (!shortcut) {
+        showToast("Vui lòng nhập phím tắt!");
+        els.inputSnippetShortcut?.focus();
+        return;
+      }
+      if (!val) {
+        showToast("Vui lòng nhập nội dung mở rộng!");
+        els.inputSnippetValue?.focus();
+        return;
+      }
+
+      if (editingSnippetId) {
+        const idx = currentSnippets.findIndex(s => s.id === editingSnippetId);
+        if (idx !== -1) {
+          currentSnippets[idx] = { id: editingSnippetId, shortcut, value: val, label };
+        }
+      } else {
+        currentSnippets.unshift({
+          id: Date.now().toString(),
+          shortcut,
+          value: val,
+          label
+        });
+      }
+
+      saveSnippets();
+      renderSnippets();
+      if (els.cardAddSnippet) els.cardAddSnippet.hidden = true;
+      showToast(editingSnippetId ? "Đã cập nhật từ gõ tắt!" : "Đã thêm từ gõ tắt mới!");
+      editingSnippetId = null;
+    });
+  }
+
+  if (els.inputSearchSnippets) {
+    els.inputSearchSnippets.addEventListener("input", (e) => {
+      currentSnippetsSearchQuery = e.target.value.trim();
+      if (els.btnClearSnippetsSearch) {
+        els.btnClearSnippetsSearch.hidden = !currentSnippetsSearchQuery;
+      }
+      renderSnippets();
+    });
+  }
+
+  if (els.btnClearSnippetsSearch) {
+    els.btnClearSnippetsSearch.addEventListener("click", () => {
+      currentSnippetsSearchQuery = "";
+      if (els.inputSearchSnippets) els.inputSearchSnippets.value = "";
+      els.btnClearSnippetsSearch.hidden = true;
+      renderSnippets();
+    });
+  }
+
   // Prevent browser from navigating away on dropped files outside drop targets
   window.addEventListener("dragover", (e) => e.preventDefault());
   window.addEventListener("drop", (e) => e.preventDefault());
@@ -4611,11 +4882,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 currentCookieProfiles = data.genCookieProfiles;
                 vaultData.genCookieProfiles = data.genCookieProfiles;
               }
+              if (Array.isArray(data.genSnippets)) {
+                currentSnippets = data.genSnippets;
+                vaultData.genSnippets = data.genSnippets;
+              }
               renderTags();
               updateHistoryUI();
               render2FA();
               renderCards();
               renderCookieProfiles();
+              renderSnippets();
             })
             .catch(() => {
               // blob khac khoa (doi PIN o dau do): bo qua
@@ -4634,6 +4910,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (changes.genCookieProfiles) {
           currentCookieProfiles = Array.isArray(changes.genCookieProfiles.newValue) ? changes.genCookieProfiles.newValue : [];
           renderCookieProfiles();
+        }
+        if (changes.genSnippets) {
+          currentSnippets = Array.isArray(changes.genSnippets.newValue) ? changes.genSnippets.newValue : [];
+          renderSnippets();
         }
       }
     });
@@ -4657,6 +4937,8 @@ document.addEventListener("DOMContentLoaded", () => {
       switchTab(els.tabCards, els.viewCards);
     } else if (urlParams.get("tab") === "cookies" || urlParams.get("view") === "cookies") {
       switchTab(els.tabCookies, els.viewCookies);
+    } else if (urlParams.get("tab") === "snippets" || urlParams.get("view") === "snippets") {
+      switchTab(els.tabSnippets, els.viewSnippets);
     }
   });
 });

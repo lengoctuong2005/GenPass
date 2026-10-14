@@ -2506,4 +2506,124 @@ input[type="range"] {
   margin-top: 4px;
 }
 
+/* Snippets View Styling */
+.snippets-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.snippets-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.snippets-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.add-snippet-form-card {
+  margin-bottom: 8px;
+  animation: modalScale 0.15s ease;
+}
+
+.add-snippet-form input,
+.add-snippet-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+}
+
+.add-snippet-form input:focus,
+.add-snippet-form textarea:focus {
+  border-color: var(--border-focus);
+}
+
+.snippets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.snippet-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  gap: 8px;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.snippet-item:hover {
+  border-color: var(--border-focus);
+}
+
+.snippet-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.snippet-top-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.snippet-shortcut-badge {
+  background: var(--accent-light, #e0e7ff);
+  color: var(--accent, #4f46e5);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.snippet-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.snippet-value-row {
+  font-size: 12px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.snippet-value-row:hover {
+  color: var(--accent);
+}
+
+.snippet-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 

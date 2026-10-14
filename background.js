@@ -346,8 +346,8 @@ async function decodeQrFromUrl(url) {
   return null;
 }
 
-// --- Vault helpers: doc/ghi 5 khoa nhay cam qua blob AES-GCM ---
-const VAULT_KEYS = ["genHistory", "gen2FA", "genCards", "genCookieProfiles", "genTags"];
+// --- Vault helpers: doc/ghi 6 khoa nhay cam qua blob AES-GCM ---
+const VAULT_KEYS = ["genHistory", "gen2FA", "genCards", "genCookieProfiles", "genTags", "genSnippets"];
 
 function vaultReady() {
   return typeof GPVault !== "undefined" && !!GPVault.encryptWithPin;

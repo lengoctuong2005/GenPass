@@ -35,6 +35,9 @@
         <button id="tab-cookies" class="tab-btn" type="button">
           Cookies <span id="count-cookies" class="badge">0</span>
         </button>
+        <button id="tab-snippets" class="tab-btn" type="button">
+          <span data-i18n="tabs.snippets">Gõ tắt</span> <span id="count-snippets" class="badge">0</span>
+        </button>
         <button id="tab-about" class="tab-btn" type="button" data-i18n="tabs.about">Ủng hộ</button>
       </nav>
     </header>
@@ -260,6 +263,12 @@
           <input type="checkbox" id="opt-suggest-password" checked>
           <span class="checkbox-custom"></span>
           <span class="toggle-label">Gợi ý mật khẩu mạnh khi đăng ký (như Google Password Manager)</span>
+        </label>
+
+        <label class="toggle-item full-width" style="margin-top: 6px;">
+          <input type="checkbox" id="opt-snippets" checked>
+          <span class="checkbox-custom"></span>
+          <span class="toggle-label" data-i18n="settings.snippets">Gợi ý từ gõ tắt khi nhập trên trang web (Text Expansion)</span>
         </label>
 
         <label class="toggle-item full-width" style="margin-top: 6px;">
@@ -506,6 +515,46 @@
 
       <!-- Cookie profiles list for domain -->
       <div id="list-cookie-profiles" class="cookie-profiles-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </main>
+
+    <!-- Snippets / Text Expansion View -->
+    <main id="view-snippets" class="view-panel">
+      <div class="snippets-header">
+        <span class="snippets-title" data-i18n="snippets.title">Từ gõ tắt & Mẫu nhanh</span>
+        <div class="snippets-header-actions">
+          <button id="btn-toggle-add-snippet" class="btn-text" type="button" data-i18n="snippets.addBtn">+ Thêm gõ tắt</button>
+        </div>
+      </div>
+
+      <!-- Add/Edit Snippet Form -->
+      <section id="card-add-snippet" class="card add-snippet-form-card" hidden>
+        <div class="add-snippet-form">
+          <div class="form-row">
+            <input type="text" id="input-snippet-shortcut" placeholder="Phím tắt (vd: eml, sdt, /mail...)" data-i18n-placeholder="snippets.shortcutPlaceholder" maxlength="32">
+          </div>
+          <div class="form-row" style="margin-top: 6px;">
+            <textarea id="input-snippet-value" rows="2" placeholder="Nội dung mở rộng (vd: email, số điện thoại, địa chỉ...)" data-i18n-placeholder="snippets.valuePlaceholder" style="width: 100%; resize: vertical; box-sizing: border-box;"></textarea>
+          </div>
+          <div class="form-row" style="margin-top: 6px;">
+            <input type="text" id="input-snippet-label" placeholder="Nhãn / Mô tả (vd: Email cá nhân...)" data-i18n-placeholder="snippets.labelPlaceholder" maxlength="64">
+          </div>
+          <div class="form-actions" style="margin-top: 8px; display: flex; gap: 8px; justify-content: flex-end;">
+            <button id="btn-cancel-snippet" class="btn-secondary" type="button" data-i18n="snippets.cancelBtn">Hủy</button>
+            <button id="btn-save-snippet" class="btn-primary" type="button" data-i18n="snippets.saveBtn">Lưu</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Search bar -->
+      <div class="search-box" style="margin: 8px 0;">
+        <input type="text" id="input-search-snippets" placeholder="Tìm kiếm từ gõ tắt..." data-i18n-placeholder="snippets.searchPlaceholder">
+        <button type="button" id="btn-clear-snippets-search" class="clear-search-btn" title="Xóa tìm kiếm" hidden>&times;</button>
+      </div>
+
+      <!-- Snippets list -->
+      <div id="list-snippets" class="snippets-list">
         <!-- Rendered dynamically -->
       </div>
     </main>

@@ -22,6 +22,8 @@ function loadSuggest() {
       suggest: generateStrongSuggestion,
       looksLike: looksLikeNewPasswordField,
       findConfirm: findSuggestConfirmField,
+      findPrimary: findSuggestPrimaryField,
+      isConfirm: isConfirmField,
       close: closeSuggestBubble,
       show: showSuggestBubble,
       init: initSuggestPassword,
@@ -230,4 +232,48 @@ assert(S.i18n.vi.lockedToast, "i18n.vi.lockedToast must exist");
 assert(S.i18n.en.lockedToast, "i18n.en.lockedToast must exist");
 console.log("✓ vault-locked save toast passed (6/6)");
 
-console.log("\nALL SUGGEST-PASSWORD TESTS PASSED! (10/10 test groups)");
+// --- 9. SPA / Angular Material formless & label-based confirm detection ---
+// a) Angular Material outline input with <mat-label> inside container and no form
+const matLabelEl = { textContent: "Confirm Password" };
+const matContainer = {
+  querySelector: (sel) => (sel.includes("mat-label") ? matLabelEl : null)
+};
+let cardContainer = null;
+const angularConfirm = {
+  type: "password",
+  id: "mat-input-1",
+  closest: (sel) => (sel.includes("mat-form-field") ? matContainer : (sel.includes("card") ? cardContainer : null)),
+  getAttribute: () => null,
+  labels: []
+};
+const angularPass = {
+  type: "password",
+  id: "mat-input-0",
+  closest: (sel) => (sel.includes("card") ? cardContainer : null),
+  getAttribute: () => null,
+  labels: []
+};
+cardContainer = {
+  querySelectorAll: () => [angularPass, angularConfirm]
+};
+
+assert.strictEqual(S.looksLike(angularPass), true, "primary field in Angular Material card must trigger suggestion");
+assert.strictEqual(S.looksLike(angularConfirm), false, "confirm field in Angular Material card must NOT re-trigger suggestion");
+assert.strictEqual(S.findConfirm(angularPass), angularConfirm, "findConfirm must resolve Angular Material confirm input");
+assert.strictEqual(S.findConfirm(angularConfirm), null, "confirm input must have no confirm sibling");
+assert.strictEqual(S.findPrimary(angularConfirm), angularPass, "findPrimary must resolve primary field from confirm input");
+
+// b) Pair fallback when 2 password fields exist with no keywords at all
+let genericContainer = null;
+const genericPass1 = { type: "password", id: "p1", closest: () => genericContainer, getAttribute: () => null };
+const genericPass2 = { type: "password", id: "p2", closest: () => genericContainer, getAttribute: () => null };
+genericContainer = { querySelectorAll: () => [genericPass1, genericPass2] };
+
+assert.strictEqual(S.looksLike(genericPass1), true, "1st of 2 generic password fields in signup container must trigger");
+assert.strictEqual(S.looksLike(genericPass2), false, "2nd of 2 generic password fields must NOT trigger (it is confirm)");
+assert.strictEqual(S.findConfirm(genericPass1), genericPass2, "1st field must pair with 2nd field as confirm");
+assert.strictEqual(S.findConfirm(genericPass2), null, "2nd field must not have a confirm field");
+assert.strictEqual(S.findPrimary(genericPass2), genericPass1, "findPrimary must resolve 1st field from 2nd generic field");
+console.log("✓ SPA / Angular Material & generic 2-box pairing passed (10/10)");
+
+console.log("\nALL SUGGEST-PASSWORD TESTS PASSED! (11/11 test groups)");

@@ -864,7 +864,7 @@
   };
 
   const SUGGEST_NEW_PASSWORD_RE = /(new[-_ ]?password|new[-_ ]?pass|password[-_ ]?new|mat[-_ ]?khau[-_ ]?moi)/i;
-  const SUGGEST_CONFIRM_RE = /(confirm|retype|repeat|verify|nhap lai|nhập lại|xac nhan|xác nhận)/i;
+  const SUGGEST_CONFIRM_RE = /(confirm|retype|repeat|verify|re-?enter|nhap[-_ ]?lai|nhập[-_ ]?lại|xac[-_ ]?nhan|xác[-_ ]?nhận|xac[-_ ]?thuc|xác[-_ ]?thực)/i;
   const SUGGEST_SIGNUP_RE = /(sign ?up|register|create account|tạo tài khoản|tao tai khoan|đăng ký|dang ky)/i;
 
   let activeSuggestBubble = null;
@@ -916,14 +916,59 @@
   }
 
   function suggestAttrText(el) {
+    if (!el) return "";
     const aria = (el.getAttribute && el.getAttribute("aria-label")) || "";
-    return `${el.name || ""} ${el.id || ""} ${el.placeholder || ""} ${aria}`;
+    const fcn = (el.getAttribute && el.getAttribute("formcontrolname")) || "";
+    let extra = "";
+    try {
+      if (el.labels && el.labels.length) {
+        extra += " " + Array.from(el.labels).map(l => (l && l.textContent) || "").join(" ");
+      }
+      const labelledBy = el.getAttribute && el.getAttribute("aria-labelledby");
+      if (labelledBy && typeof document !== "undefined" && document.getElementById) {
+        const ref = document.getElementById(labelledBy);
+        if (ref) extra += " " + (ref.textContent || "");
+      }
+      if (el.closest) {
+        const container = el.closest("mat-form-field, .form-group, .field, .input-group, [class*='form-field'], [class*='form-group'], [class*='form-item'], [class*='field'], [class*='control'], label");
+        if (container) {
+          const lbl = container.querySelector && container.querySelector("label, mat-label, [class*='label']");
+          if (lbl) extra += " " + (lbl.textContent || "");
+        }
+      }
+    } catch (_) {}
+    return `${el.name || ""} ${el.id || ""} ${el.placeholder || ""} ${aria} ${fcn} ${extra}`;
   }
 
   function suggestScopePasswords(el) {
-    // ponytail: chi quet trong form cua chinh o do; trang khong co form thi nho text signup o duoi.
-    if (!el.form || !el.form.querySelectorAll) return [];
-    return Array.from(el.form.querySelectorAll('input[type="password"]'));
+    if (!el) return [];
+    // ponytail: uu tien form hien tai; trang SPA formless thi tim trong container bao quanh hoac toan document.
+    if (el.form && el.form.querySelectorAll) {
+      return Array.from(el.form.querySelectorAll('input[type="password"]'));
+    }
+    if (el.closest) {
+      const container = el.closest("form, [role='form'], fieldset, main, [class*='modal'], [class*='dialog'], [class*='card'], [class*='auth'], [class*='register'], [class*='signup'], [class*='form']");
+      if (container && container.querySelectorAll) {
+        const list = Array.from(container.querySelectorAll('input[type="password"]'));
+        if (list.length >= 2) return list;
+      }
+    }
+    if (typeof document !== "undefined" && document.querySelectorAll) {
+      const all = Array.from(document.querySelectorAll('input[type="password"]'));
+      return all.filter(i => i.type === "password" && (typeof isFillable === "function" ? (isFillable(i) || i.offsetParent === undefined) : true));
+    }
+    return [];
+  }
+
+  function isConfirmField(el, precomputedScope) {
+    if (!el || el.type !== "password") return false;
+    if (SUGGEST_CONFIRM_RE.test(suggestAttrText(el))) return true;
+    const scope = precomputedScope || suggestScopePasswords(el);
+    // Trong form co 2 o mat khau, o thu 2 luon la o xac nhan mat khau
+    if (scope && scope.length === 2 && scope[1] === el) return true;
+    // Trong form co 3 o mat khau (current, new, confirm), o cuoi cung la confirm
+    if (scope && scope.length >= 3 && scope[scope.length - 1] === el) return true;
+    return false;
   }
 
   // Truong hop dung: o mat khau moi trong form dang ky. Form dang nhap khong thu khi o do la current-password.
@@ -933,12 +978,14 @@
     if (el.value) return false;
     if ((el.autocomplete || "").toLowerCase() === "current-password") return false;
 
+    const passInputs = suggestScopePasswords(el);
+    if (isConfirmField(el, passInputs)) return false;
+
     if (["new-password", "new_password"].includes((el.autocomplete || "").toLowerCase())) return true;
     if (SUGGEST_NEW_PASSWORD_RE.test(suggestAttrText(el))) return true;
 
-    const passInputs = suggestScopePasswords(el);
     if (passInputs.length >= 2) {
-      const hasConfirmSibling = passInputs.some(other => other !== el && SUGGEST_CONFIRM_RE.test(suggestAttrText(other)));
+      const hasConfirmSibling = passInputs.some(other => other !== el && isConfirmField(other, passInputs));
       if (hasConfirmSibling || passInputs[0] === el) return true;
     }
 
@@ -954,8 +1001,44 @@
   }
 
   function findSuggestConfirmField(passInput) {
+    if (!passInput) return null;
     const passInputs = suggestScopePasswords(passInput);
-    return passInputs.find(other => other !== passInput && SUGGEST_CONFIRM_RE.test(suggestAttrText(other))) || null;
+    if (!passInputs || passInputs.length < 2) return null;
+    if (isConfirmField(passInput, passInputs)) return null;
+
+    // 1. O nao khop tu khoa confirm/nhap lai
+    const explicit = passInputs.find(other => other !== passInput && SUGGEST_CONFIRM_RE.test(suggestAttrText(other)));
+    if (explicit) return explicit;
+
+    // 2. Neu form co 2 o mat khau va passInput la o 1 thi o 2 la confirm
+    if (passInputs.length === 2 && passInputs[0] === passInput) {
+      return passInputs[1];
+    }
+
+    // 3. O mat khau dung ngay phia sau
+    const idx = passInputs.indexOf(passInput);
+    if (idx !== -1 && idx < passInputs.length - 1) {
+      return passInputs[idx + 1];
+    }
+
+    return null;
+  }
+
+  function findSuggestPrimaryField(confirmInput) {
+    if (!confirmInput) return null;
+    const passInputs = suggestScopePasswords(confirmInput);
+    if (!passInputs || passInputs.length < 2) return null;
+
+    const idx = passInputs.indexOf(confirmInput);
+    if (idx > 0) {
+      for (let i = idx - 1; i >= 0; i--) {
+        if (!isConfirmField(passInputs[i], passInputs)) {
+          return passInputs[i];
+        }
+      }
+      return passInputs[0];
+    }
+    return passInputs.find(other => other !== confirmInput && !isConfirmField(other, passInputs)) || null;
   }
 
   // An bubble; that bai thi cung khong duoc xoa mat khau da dien trong o
@@ -1032,7 +1115,10 @@
     node.querySelector(".gps-btn-own").addEventListener("click", () => {
       if (typeof event !== "undefined" && event && event.isTrusted === false) return;
       setNativeValue(passInput, "");
-      if (confirmField && confirmField !== passInput) setNativeValue(confirmField, "");
+      const targetConfirm = (confirmField && confirmField !== passInput) ? confirmField : findSuggestConfirmField(passInput);
+      if (targetConfirm) setNativeValue(targetConfirm, "");
+      delete passInput.dataset.genpassSuggestion;
+      if (targetConfirm) delete targetConfirm.dataset.genpassSuggestion;
       passInput.dataset.genpassSuggestDismissed = "1";
       passInput.focus();
       closeSuggestBubble();
@@ -1040,6 +1126,9 @@
 
     node.querySelector(".gps-btn-use").addEventListener("click", () => {
       if (typeof event !== "undefined" && event && event.isTrusted === false) return;
+      setNativeValue(passInput, suggestion);
+      const targetConfirm = (confirmField && confirmField !== passInput) ? confirmField : findSuggestConfirmField(passInput);
+      if (targetConfirm) setNativeValue(targetConfirm, suggestion);
       gpGet(["genHistory"], (res) => {
         const history = Array.isArray(res.genHistory) ? res.genHistory : [];
         const already = history.some(h => h.password === suggestion && (h.name === domain || (h.url || "").includes(domain)));
@@ -1089,36 +1178,68 @@
     document.addEventListener("focusin", (e) => {
       const el = e.target;
       if (!(el instanceof HTMLInputElement) || el.type !== "password") return;
-      if (el.value !== "" || el.dataset.genpassSuggestDismissed) return;
+      if (el.dataset.genpassSuggestDismissed) return;
       if (activeSuggestBubble && activeSuggestBubble.passInput === el) return;
-      if (!looksLikeNewPasswordField(el)) return;
 
-      gpGet(["genOptions"], (res) => {
-        if (res.genOptions && res.genOptions.suggestStrongPassword === false) return;
+      if (looksLikeNewPasswordField(el)) {
         if (el.value !== "") return;
+        gpGet(["genOptions"], (res) => {
+          if (res.genOptions && res.genOptions.suggestStrongPassword === false) return;
+          if (el.value !== "") return;
 
-        const suggestion = generateStrongSuggestion(res.genOptions || {});
-        setNativeValue(el, suggestion);
+          const suggestion = generateStrongSuggestion(res.genOptions || {});
+          setNativeValue(el, suggestion);
+          el.dataset.genpassSuggestion = suggestion;
 
-        let confirmField = findSuggestConfirmField(el);
-        if (confirmField && confirmField.value === "") {
-          setNativeValue(confirmField, suggestion);
-        } else {
-          confirmField = null;
-        }
+          let confirmField = findSuggestConfirmField(el);
+          if (confirmField && (confirmField.value === "" || confirmField.dataset.genpassSuggestion)) {
+            setNativeValue(confirmField, suggestion);
+            confirmField.dataset.genpassSuggestion = suggestion;
+          } else {
+            confirmField = null;
+          }
 
-        const lang = (res.genOptions && res.genOptions.lang) || (typeof navigator !== "undefined" ? navigator.language : "");
-        showSuggestBubble(el, suggestion, confirmField, lang);
+          const lang = (res.genOptions && res.genOptions.lang) || (typeof navigator !== "undefined" ? navigator.language : "");
+          showSuggestBubble(el, suggestion, confirmField, lang);
 
-        if (!el.dataset.genpassSuggestBound) {
-          el.dataset.genpassSuggestBound = "1";
-          el.addEventListener("input", () => {
-            if (activeSuggestBubble && activeSuggestBubble.passInput === el && el.value !== activeSuggestBubble.suggestion) {
-              closeSuggestBubble();
-            }
+          if (!el.dataset.genpassSuggestBound) {
+            el.dataset.genpassSuggestBound = "1";
+            el.addEventListener("input", () => {
+              if (activeSuggestBubble && activeSuggestBubble.passInput === el && el.value !== activeSuggestBubble.suggestion) {
+                closeSuggestBubble();
+              }
+            });
+          }
+        });
+        return;
+      }
+
+      // Neu nguoi dung bam vao o xac nhan (Confirm Password):
+      // Tuyet doi khong tu sinh mat khau ngau nhien khac vao day lam lech 2 o!
+      const primary = findSuggestPrimaryField(el);
+      if (primary && primary !== el) {
+        if (primary.value && el.value !== primary.value) {
+          // O chinh da co mat khau: dong bo sang o xac nhan neu o xac nhan dang trong hoac da duoc dien boi goi y
+          if (el.value === "" || el.dataset.genpassSuggestion || primary.dataset.genpassSuggestion) {
+            setNativeValue(el, primary.value);
+            el.dataset.genpassSuggestion = primary.value;
+          }
+        } else if (!primary.value && el.value === "") {
+          // Ca hai o deu trong ma nguoi dung bam vao o confirm truoc:
+          // Sinh 1 mat khau duy nhat va dien vao ca 2 o, dong bo tuyet doi
+          gpGet(["genOptions"], (res) => {
+            if (res.genOptions && res.genOptions.suggestStrongPassword === false) return;
+            if (el.value !== "" || primary.value !== "") return;
+            const suggestion = generateStrongSuggestion(res.genOptions || {});
+            setNativeValue(primary, suggestion);
+            setNativeValue(el, suggestion);
+            primary.dataset.genpassSuggestion = suggestion;
+            el.dataset.genpassSuggestion = suggestion;
+            const lang = (res.genOptions && res.genOptions.lang) || (typeof navigator !== "undefined" ? navigator.language : "");
+            showSuggestBubble(el, suggestion, primary, lang);
           });
         }
-      });
+      }
     }, true);
 
     document.addEventListener("focusout", (e) => {
@@ -1129,14 +1250,236 @@
     });
   }
 
-  // Init badges + suggest password on document idle / load
+  // --- Quick Snippets / Text Expansion on Web Inputs ---
+  let activeSnippetBubble = null;
+  let snippetDebounceTimer = null;
+
+  function getWordAtCursor(el) {
+    try {
+      const pos = (typeof el.selectionStart === "number") ? el.selectionStart : (el.value || "").length;
+      const textBefore = (el.value || "").slice(0, pos);
+      const match = textBefore.match(/([^\s]+)$/);
+      return {
+        word: match ? match[1] : "",
+        start: match ? pos - match[1].length : pos,
+        end: pos
+      };
+    } catch (_) {
+      const val = (el.value || "").trim();
+      return { word: val, start: 0, end: (el.value || "").length };
+    }
+  }
+
+  function matchSnippets(word, snippets) {
+    if (!word || !Array.isArray(snippets) || snippets.length === 0) return [];
+    const w = word.toLowerCase().trim();
+    const cleanW = w.startsWith("/") ? w.slice(1) : w;
+    return snippets.filter(s => {
+      const sc = (s.shortcut || "").toLowerCase().trim();
+      const cleanSc = sc.startsWith("/") ? sc.slice(1) : sc;
+      if (!sc) return false;
+      if (sc === w || cleanSc === cleanW) return true;
+      if (cleanW.length >= 2 && cleanSc.startsWith(cleanW)) return true;
+      return false;
+    });
+  }
+
+  function closeSnippetBubble() {
+    if (!activeSnippetBubble) return;
+    const ctx = activeSnippetBubble;
+    activeSnippetBubble = null;
+    document.removeEventListener("mousedown", ctx.onOutsideDown, true);
+    window.removeEventListener("scroll", ctx.updatePosition, true);
+    window.removeEventListener("resize", ctx.updatePosition);
+    ctx.node.remove();
+  }
+
+  function applySnippet(el, snippet, wordInfo) {
+    if (!el || !snippet) return;
+    const full = el.value || "";
+    const before = full.slice(0, wordInfo.start);
+    const after = full.slice(wordInfo.end);
+    const newVal = before + snippet.value + after;
+    setNativeValue(el, newVal);
+    const newPos = before.length + snippet.value.length;
+    if (typeof el.setSelectionRange === "function") {
+      try { el.setSelectionRange(newPos, newPos); } catch (_) {}
+    }
+    closeSnippetBubble();
+    showInPageToast(`GenPass: Đã chèn "${snippet.shortcut}"!`);
+  }
+
+  function showSnippetBubble(el, matches, wordInfo) {
+    if (!document.body || matches.length === 0) return;
+    if (activeSnippetBubble) closeSnippetBubble();
+
+    const node = document.createElement("div");
+    node.id = "genpass-snippet-bubble";
+
+    let activeIndex = 0;
+
+    node.innerHTML = `
+      <div class="gpb-header">
+        <svg viewBox="0 0 24 24"><path d="M7 2v11h3v9l7-12h-4l4-8z"/></svg>
+        <span>Gợi ý gõ tắt (GenPass)</span>
+      </div>
+      <div class="gpb-list"></div>
+      <div class="gpb-footer">Tab / Enter hoặc click để chèn · Esc để đóng</div>
+    `;
+
+    const listEl = node.querySelector(".gpb-list");
+    matches.slice(0, 4).forEach((s, idx) => {
+      const item = document.createElement("div");
+      item.className = "gpb-item" + (idx === 0 ? " active" : "");
+      item.innerHTML = `
+        <div class="gpb-item-left">
+          <span class="gpb-badge">${escapeHtml(s.shortcut)}</span>
+          <span class="gpb-text">${escapeHtml(s.value)}</span>
+        </div>
+        ${s.label ? `<span class="gpb-label">${escapeHtml(s.label)}</span>` : ""}
+      `;
+      item.addEventListener("mousedown", (e) => {
+        e.preventDefault();
+        applySnippet(el, s, wordInfo);
+      });
+      listEl.appendChild(item);
+    });
+
+    function updatePosition() {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 && rect.height === 0) {
+        node.style.display = "none";
+        return;
+      }
+      node.style.display = "flex";
+      const height = node.offsetHeight || 120;
+      const flipUp = rect.bottom + height + 16 > window.innerHeight && rect.top - height - 8 > 8;
+      const top = flipUp ? rect.top - height - 8 : rect.bottom + 6;
+      const maxLeft = Math.max(8, window.innerWidth - 328);
+      node.style.top = `${Math.round(Math.max(8, top))}px`;
+      node.style.left = `${Math.round(Math.min(maxLeft, Math.max(8, rect.left)))}px`;
+    }
+
+    const ctx = {
+      node,
+      el,
+      matches,
+      wordInfo,
+      updatePosition,
+      get activeIndex() { return activeIndex; },
+      set activeIndex(val) {
+        activeIndex = Math.max(0, Math.min(matches.length - 1, val));
+        const items = listEl.querySelectorAll(".gpb-item");
+        items.forEach((it, i) => {
+          if (i === activeIndex) it.classList.add("active");
+          else it.classList.remove("active");
+        });
+      },
+      onOutsideDown: (e) => {
+        if (activeSnippetBubble !== ctx) return;
+        if (node.contains(e.target) || e.target === el) return;
+        closeSnippetBubble();
+      }
+    };
+
+    try {
+      document.body.appendChild(node);
+      updatePosition();
+      activeSnippetBubble = ctx;
+      document.addEventListener("mousedown", ctx.onOutsideDown, true);
+      window.addEventListener("scroll", ctx.updatePosition, true);
+      window.addEventListener("resize", ctx.updatePosition);
+    } catch (_) {
+      closeSnippetBubble();
+    }
+  }
+
+  function isSnippetTarget(el) {
+    if (!el) return false;
+    const tag = (el.tagName || "").toUpperCase();
+    if (tag === "TEXTAREA" || (typeof HTMLTextAreaElement !== "undefined" && el instanceof HTMLTextAreaElement)) {
+      return !el.readOnly && !el.disabled;
+    }
+    const isInput = tag === "INPUT" || (typeof HTMLInputElement !== "undefined" && el instanceof HTMLInputElement) || (el.type && !el.tagName);
+    if (isInput) {
+      if (el.readOnly || el.disabled) return false;
+      const t = (el.type || "").toLowerCase();
+      return ["text", "email", "tel", "search", "url", ""].includes(t);
+    }
+    return false;
+  }
+
+  function initQuickSnippets() {
+    document.addEventListener("input", (e) => {
+      const el = e.target;
+      if (!isSnippetTarget(el)) {
+        if (activeSnippetBubble) closeSnippetBubble();
+        return;
+      }
+
+      clearTimeout(snippetDebounceTimer);
+      snippetDebounceTimer = setTimeout(() => {
+        const wordInfo = getWordAtCursor(el);
+        if (!wordInfo.word || wordInfo.word.length < 2) {
+          if (activeSnippetBubble && activeSnippetBubble.el === el) closeSnippetBubble();
+          return;
+        }
+
+        gpGet(["genOptions", "genSnippets"], (res) => {
+          if (res.genOptions && res.genOptions.snippetsEnabled === false) return;
+          const snippets = Array.isArray(res.genSnippets) ? res.genSnippets : [];
+          if (!snippets.length) {
+            if (activeSnippetBubble) closeSnippetBubble();
+            return;
+          }
+          const matches = matchSnippets(wordInfo.word, snippets);
+          if (matches.length > 0) {
+            showSnippetBubble(el, matches, wordInfo);
+          } else if (activeSnippetBubble && activeSnippetBubble.el === el) {
+            closeSnippetBubble();
+          }
+        });
+      }, 40);
+    }, true);
+
+    document.addEventListener("keydown", (e) => {
+      if (!activeSnippetBubble) return;
+      const ctx = activeSnippetBubble;
+      if (e.key === "Escape") {
+        closeSnippetBubble();
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        ctx.activeIndex = ctx.activeIndex + 1;
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        ctx.activeIndex = ctx.activeIndex - 1;
+        return;
+      }
+      if (e.key === "Tab" || e.key === "Enter") {
+        const selected = ctx.matches[ctx.activeIndex] || ctx.matches[0];
+        if (selected) {
+          e.preventDefault();
+          e.stopPropagation();
+          applySnippet(ctx.el, selected, ctx.wordInfo);
+        }
+      }
+    }, true);
+  }
+
+  // Init badges + suggest password + snippets on document idle / load
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       initAutoFillBadges();
       initSuggestPassword();
+      initQuickSnippets();
     });
   } else {
     initAutoFillBadges();
     initSuggestPassword();
+    initQuickSnippets();
   }
 })();

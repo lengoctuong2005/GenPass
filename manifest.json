@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "GenPass - Trình tạo mật khẩu",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Tạo mật khẩu an toàn theo chuẩn ngành với tùy chọn độ dài, ký tự và lưu lịch sử.",
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
