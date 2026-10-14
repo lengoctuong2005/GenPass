@@ -212,6 +212,38 @@ function calculatePassphraseStrength(numWords, includeNumber, wordlistSize = 129
   return { score: 4, label: "Rất mạnh", color: "#059669", pct: 100 };
 }
 
+// HaveIBeenPwned k-Anonymity API (Kiem tra ro ri mat khau an toan, khong gui mat khau di)
+async function checkPwnedPassword(password) {
+  if (!password || password.length < 4) return 0;
+  try {
+    const buffer = new TextEncoder().encode(password);
+    const digest = await crypto.subtle.digest("SHA-1", buffer);
+    const hex = Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("").toUpperCase();
+    const prefix = hex.slice(0, 5);
+    const suffix = hex.slice(5);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3000);
+    const res = await fetch("https://api.pwnedpasswords.com/range/" + prefix, {
+      signal: controller.signal,
+      cache: "no-store"
+    });
+    clearTimeout(timer);
+    if (!res.ok) return 0;
+    const text = await res.text();
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      const [hashSuffix, countStr] = line.split(":");
+      if (hashSuffix === suffix) {
+        return parseInt(countStr, 10) || 1;
+      }
+    }
+    return 0;
+  } catch {
+    return 0;
+  }
+}
+
 // UI Controller
 document.addEventListener("DOMContentLoaded", () => {
   const els = {
@@ -230,6 +262,7 @@ document.addEventListener("DOMContentLoaded", () => {
     copy: document.getElementById("btn-copy"),
     strengthBar: document.getElementById("strength-bar"),
     strengthText: document.getElementById("strength-text"),
+    breachStatus: document.getElementById("breach-status"),
     lengthRange: document.getElementById("length-range"),
     lengthVal: document.getElementById("length-val"),
     optUpper: document.getElementById("opt-upper"),
@@ -248,6 +281,9 @@ document.addEventListener("DOMContentLoaded", () => {
     btnExportCsv: document.getElementById("btn-export-csv"),
     btnImportCsv: document.getElementById("btn-import-csv"),
     inputImportCsv: document.getElementById("input-import-csv"),
+    btnBackupVault: document.getElementById("btn-backup-vault"),
+    btnRestoreVault: document.getElementById("btn-restore-vault"),
+    inputImportVault: document.getElementById("input-import-vault"),
     modalImportCsv: document.getElementById("modal-import-csv"),
     btnCloseImportModal: document.getElementById("btn-close-import-modal"),
     csvDropZone: document.getElementById("csv-drop-zone"),
@@ -485,8 +521,10 @@ document.addEventListener("DOMContentLoaded", () => {
       "settings.vaultTimeout": "Tự khóa sau thời gian không dùng",
       "settings.vaultChangePin": "Đổi mã PIN",
       "history.title": "Lịch sử",
-      "history.import": "Nhập",
-      "history.export": "Xuất",
+      "history.import": "Nhập CSV",
+      "history.export": "Xuất CSV",
+      "history.backup": "Sao lưu",
+      "history.restore": "Khôi phục",
       "history.tags": "Nhãn",
       "history.clear": "Xóa",
       "history.searchPlaceholder": "Tìm theo nền tảng, tài khoản, URL...",
@@ -567,8 +605,10 @@ document.addEventListener("DOMContentLoaded", () => {
       "settings.vaultTimeout": "Auto-lock idle timeout",
       "settings.vaultChangePin": "Change PIN",
       "history.title": "History",
-      "history.import": "Import",
-      "history.export": "Export",
+      "history.import": "Import CSV",
+      "history.export": "Export CSV",
+      "history.backup": "Backup",
+      "history.restore": "Restore",
       "history.tags": "Tags",
       "history.clear": "Clear",
       "history.searchPlaceholder": "Search by platform, account, URL...",
@@ -710,12 +750,17 @@ document.addEventListener("DOMContentLoaded", () => {
     return new Uint8Array(output);
   }
 
-  async function generateTotp(secretBase32, timeSec = Math.floor(Date.now() / 1000)) {
+  async function generateTotp(secretBase32, timeSec = Math.floor(Date.now() / 1000), opts = {}) {
     const keyBytes = base32Decode(secretBase32);
-    if (keyBytes.length === 0) return "------";
+    const digits = parseInt(opts.digits, 10) || 6;
+    const period = parseInt(opts.period, 10) || 30;
+    const rawAlgo = (opts.algorithm || "SHA-1").toUpperCase();
+    const hash = ["SHA-1", "SHA-256", "SHA-512"].includes(rawAlgo) ? rawAlgo : "SHA-1";
+
+    if (keyBytes.length === 0) return "-".repeat(digits);
 
     try {
-      const counter = Math.floor(timeSec / 30);
+      const counter = Math.floor(timeSec / period);
       const counterBuffer = new ArrayBuffer(8);
       const view = new DataView(counterBuffer);
       view.setBigUint64(0, BigInt(counter), false);
@@ -723,7 +768,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const cryptoKey = await crypto.subtle.importKey(
         "raw",
         keyBytes,
-        { name: "HMAC", hash: "SHA-1" },
+        { name: "HMAC", hash },
         false,
         ["sign"]
       );
@@ -738,10 +783,10 @@ document.addEventListener("DOMContentLoaded", () => {
         ((sigBytes[offset + 2] & 0xff) << 8) |
         (sigBytes[offset + 3] & 0xff);
 
-      const otp = binary % 1000000;
-      return otp.toString().padStart(6, "0");
+      const mod = Math.pow(10, digits);
+      return (binary % mod).toString().padStart(digits, "0");
     } catch {
-      return "------";
+      return "-".repeat(digits);
     }
   }
 
@@ -763,10 +808,16 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const secret = url.searchParams.get("secret") || "";
+      const algorithm = (url.searchParams.get("algorithm") || "SHA-1").toUpperCase();
+      const digits = parseInt(url.searchParams.get("digits"), 10) || 6;
+      const period = parseInt(url.searchParams.get("period"), 10) || 30;
       return {
         name: issuer || account || "2FA",
         account: account,
-        secret: secret.trim()
+        secret: secret.trim(),
+        algorithm,
+        digits,
+        period
       };
     } catch {
       return null;
@@ -2107,10 +2158,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const nowSec = Math.floor(Date.now() / 1000);
-    const remainingSec = 30 - (nowSec % 30);
-    const pct = (remainingSec / 30) * 100;
 
     for (const item of sorted) {
+      const itemPeriod = item.period || 30;
+      const remainingSec = itemPeriod - (nowSec % itemPeriod);
+      const pct = (remainingSec / itemPeriod) * 100;
+
       const card = document.createElement("div");
       card.className = "twofa-item";
 
@@ -2142,8 +2195,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
       header.appendChild(nameGroup);
 
-      const code = await generateTotp(item.secret, nowSec);
-      const formattedCode = code.length === 6 ? `${code.slice(0, 3)} ${code.slice(3)}` : code;
+      const code = await generateTotp(item.secret, nowSec, item);
+      const formattedCode = code.length === 6
+        ? `${code.slice(0, 3)} ${code.slice(3)}`
+        : (code.length === 8 ? `${code.slice(0, 4)} ${code.slice(4)}` : code);
 
       const codeRow = document.createElement("div");
       codeRow.className = "twofa-code-row";
@@ -2472,6 +2527,25 @@ document.addEventListener("DOMContentLoaded", () => {
       els.strengthText.textContent = strength.label;
       els.strengthText.style.color = strength.color;
 
+      if (els.breachStatus) {
+        els.breachStatus.hidden = true;
+        const checkPwd = pass;
+        checkPwnedPassword(checkPwd).then((count) => {
+          if (els.display.value !== checkPwd) return;
+          if (count > 0) {
+            els.breachStatus.hidden = false;
+            els.breachStatus.className = "breach-status-badge breached";
+            els.breachStatus.textContent = currentLang === "en"
+              ? `⚠️ Breached (${count.toLocaleString()}x)`
+              : `⚠️ Đã lộ (${count.toLocaleString()} lần)`;
+          } else {
+            els.breachStatus.hidden = false;
+            els.breachStatus.className = "breach-status-badge safe";
+            els.breachStatus.textContent = currentLang === "en" ? "✓ Not breached" : "✓ Chưa từng bị lộ";
+          }
+        }).catch(() => {});
+      }
+
       saveOptions(opts);
       if (autoSave) {
         saveHistoryItem(pass, els.passwordName?.value, els.passwordTag?.value, currentTabUrl, els.passwordNote?.value, els.passwordUser?.value);
@@ -2494,6 +2568,25 @@ document.addEventListener("DOMContentLoaded", () => {
     els.strengthBar.style.backgroundColor = strength.color;
     els.strengthText.textContent = strength.label;
     els.strengthText.style.color = strength.color;
+
+    if (els.breachStatus) {
+      els.breachStatus.hidden = true;
+      const checkPwd = pass;
+      checkPwnedPassword(checkPwd).then((count) => {
+        if (els.display.value !== checkPwd) return;
+        if (count > 0) {
+          els.breachStatus.hidden = false;
+          els.breachStatus.className = "breach-status-badge breached";
+          els.breachStatus.textContent = currentLang === "en"
+            ? `⚠️ Breached (${count.toLocaleString()}x)`
+            : `⚠️ Đã lộ (${count.toLocaleString()} lần)`;
+        } else {
+          els.breachStatus.hidden = false;
+          els.breachStatus.className = "breach-status-badge safe";
+          els.breachStatus.textContent = currentLang === "en" ? "✓ Not breached" : "✓ Chưa từng bị lộ";
+        }
+      }).catch(() => {});
+    }
 
     saveOptions(opts);
     if (autoSave) {
@@ -2816,6 +2909,85 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   els.btnExportCsv.addEventListener("click", exportToCsv);
+
+  async function exportEncryptedVault() {
+    if (!vaultBlob || !vaultOpts.vaultEnabled) {
+      showToast(currentLang === "en" ? "Enable vault protection first before exporting .gpvault!" : "Hãy bật bảo vệ kho bằng mã PIN trước khi xuất file sao lưu mã hóa!");
+      return;
+    }
+    const backupData = {
+      app: "GenPass",
+      format: "genpass-encrypted-vault",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      vault: vaultBlob
+    };
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const blob = new Blob([jsonStr], { type: "application/json;charset=utf-8" });
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    a.href = blobUrl;
+    a.download = `genpass_vault_backup_${dateStr}.gpvault`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+    showToast(currentLang === "en" ? "Exported encrypted vault backup (.gpvault)!" : "Đã xuất file sao lưu kho mã hóa (.gpvault)!");
+  }
+
+  if (els.btnBackupVault) {
+    els.btnBackupVault.addEventListener("click", exportEncryptedVault);
+  }
+
+  if (els.btnRestoreVault) {
+    els.btnRestoreVault.addEventListener("click", () => {
+      if (els.inputImportVault) els.inputImportVault.click();
+    });
+  }
+
+  if (els.inputImportVault) {
+    els.inputImportVault.addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const doc = JSON.parse(ev.target.result);
+          const targetBlob = doc.vault || doc;
+          if (!targetBlob || !targetBlob.ct || !targetBlob.salt) {
+            showToast(currentLang === "en" ? "Invalid .gpvault file format!" : "Định dạng file .gpvault không hợp lệ!");
+            return;
+          }
+          const pin = prompt(currentLang === "en" ? "Enter PIN / master password of this backup:" : "Nhập mã PIN hoặc mật khẩu của file sao lưu này:");
+          if (!pin) return;
+          const { data, keyB64 } = await GPVault.unlockWithPin(targetBlob, pin.trim());
+          if (!data) throw new Error("Decrypt failed");
+
+          vaultFill(data, keyB64);
+          vaultBlob = targetBlob;
+          vaultOn = true;
+          vaultOpts.vaultEnabled = true;
+          await chrome.storage.local.set({ genVault: targetBlob });
+          await vaultSessionSet(keyB64, vaultTimeoutMin());
+          saveOptions(getOptions());
+          vaultSyncSettings();
+          updateHistoryUI();
+          render2FA();
+          renderCards();
+          renderCookieProfiles();
+          renderTags();
+          showToast(currentLang === "en" ? "Vault restored successfully from backup!" : "Đã khôi phục kho thành công từ file sao lưu!");
+        } catch (err) {
+          console.warn("Khôi phục file .gpvault thất bại:", err);
+          showToast(currentLang === "en" ? "Failed to restore backup (wrong PIN or corrupted file)!" : "Khôi phục kho thất bại (sai mã PIN hoặc file bị lỗi)!");
+        } finally {
+          e.target.value = "";
+        }
+      };
+      reader.readAsText(file);
+    });
+  }
 
   function openImportModal() {
     if (els.modalImportCsv) {

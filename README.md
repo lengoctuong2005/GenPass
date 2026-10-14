@@ -26,7 +26,9 @@ Toàn bộ dữ liệu được lưu trữ cục bộ trên máy của bạn qua
 | **Kho mã hóa Argon2id + AES-256-GCM** | Bảo vệ kho lưu trữ bằng mã PIN/mật khẩu chính, tự động khóa khi đóng popup hoặc sau thời gian chờ. Tích hợp cơ chế giới hạn tần suất thử mã để chống brute-force. |
 | **Hỗ trợ đa ngôn ngữ (i18n)** | Chuyển đổi linh hoạt giữa Tiếng Việt và Tiếng Anh với 1 chạm ngay trên thanh tiêu đề. |
 | **Kiểm tra cập nhật tự động** | Tự động kiểm tra bản mới từ GitHub định kỳ, hiển thị huy hiệu `NEW` khi có phiên bản cập nhật. |
-| **Xuất/Nhập CSV** | Định dạng CSV phổ biến của các trình quản lý mật khẩu (`name,url,username,password,note`). |
+| **Kiểm tra rò rỉ HaveIBeenPwned** | Đối chiếu mật khẩu vừa tạo với cơ sở dữ liệu rò rỉ toàn cầu qua k-Anonymity API (chỉ gửi 5 ký tự đầu của hash SHA-1), hoàn toàn riêng tư. |
+| **Sao lưu kho mã hóa (.gpvault)** | Xuất và khôi phục toàn bộ kho (mật khẩu, 2FA, thẻ, cookies) dưới dạng file mã hóa nguyên khối AES-256-GCM + Argon2id, an toàn tuyệt đối khi lưu trữ đám mây. |
+| **Xuất/Nhập CSV** | Định dạng CSV phổ biến của các trình quản lý mật khẩu (`name,url,username,password,note`), tích hợp bộ lọc chống Formula Injection (CWE-1236). |
 
 ---
 

@@ -58,6 +58,38 @@
   - Chạy `tests/vault.test.cjs`: PASS 15/15 tests (Argon2id, AES-256-GCM, AAD).
   - Chạy `tests/integration.test.cjs`: PASS 10/10 flows tích hợp (105/105 checks).
 
+- [x] **Task 8: Vá bảo mật cốt lõi & Nâng cấp v1.4.0**
+  - Vá lỗi SSRF qua địa chỉ IPv6-mapped IPv4 và chặn redirect HTTP 302 qua `{ redirect: "error" }`.
+  - Bảo vệ messaging API và port `vault-session`: chặn content script web chiếm dụng hoặc khóa kho trái phép; lọc `genHistory` theo origin tab web.
+  - Chống CSV Formula Injection (CWE-1236) khi xuất file CSV.
+  - Sửa lỗi lọc trùng khi nhập CSV (deduplicate theo tài khoản, không bỏ sót tài khoản trùng mật khẩu).
+  - Bổ sung kiểm tra Luhn checksum và hạn thẻ tín dụng khi lưu.
+  - Lưu trữ bộ đếm thử PIN và thời gian khóa tạm vào `chrome.storage.session`.
+  - Bổ sung quyền `unlimitedStorage` và `clipboardRead` vào `manifest.json`.
+
+- [x] **Task 9: Tích hợp tính năng cao cấp (v1.4.0)**
+  - **Kiểm tra mật khẩu bị lộ qua HaveIBeenPwned API (k-Anonymity)**: Băm SHA-1 mật khẩu, gửi 5 ký tự đầu để đối chiếu ẩn danh, hiển thị badge cảnh báo rò rỉ tức thì.
+  - **Sao lưu & Khôi phục kho mã hóa (.gpvault)**: Xuất và nhập kho dữ liệu mã hóa nguyên khối (AES-256-GCM + Argon2id), an toàn tuyệt đối khi lưu trữ đám mây.
+  - **Hỗ trợ toàn diện RFC 6238 TOTP**: Hỗ trợ SHA-1/SHA-256/SHA-512, mã 6/8 chữ số và chu kỳ thời gian tùy chỉnh.
+
+---
+
+## 3. Bằng chứng kiểm thử (Verification Evidence)
+
+1. **`node --test tests/*.test.cjs`**:
+   - `✓ tests/features-v14.test.cjs (4/4 groups passed)`
+   - `✓ tests/security-i18n.test.cjs (4/4 groups, 17/17 SSRF tests passed)`
+   - `✓ tests/suggest-password.test.cjs (10/10 groups passed)`
+   - `✓ tests/vault.test.cjs (18/18 checks passed)`
+   - `✓ tests/integration.test.cjs (10/10 flows, 105/105 checks passed)`
+   - `Total: 19/19 test suites PASS, 0 FAIL`
+
+2. **`node tests/e2e-chrome.cjs` (CDP Chrome thật)**:
+   - `11/11 scenarios PASS (S0 -> S10), 0 FAIL`
+
+3. **`node tests/cookie-e2e.cjs` (Cookie E2E Chrome thật)**:
+   - `10/10 scenarios PASS (S1 -> S10), 0 FAIL`
+
 ---
 
 ## 3. Bằng chứng kiểm thử (Verification Evidence)

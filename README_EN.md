@@ -26,7 +26,10 @@ All data is stored locally on your device via `chrome.storage.local`. Nothing is
 | **Argon2id + AES-256-GCM Vault** | Protects the local vault with a master PIN/password, automatic relock upon popup close or idle timeout. Rate-limiting prevents automated brute-force attempts. |
 | **Bilingual UI (i18n)** | 1-click toggle between Vietnamese and English directly on the popup header. |
 | **Auto Update Checks** | Periodically checks GitHub releases every 12 hours, displaying a `NEW` badge when an update is available. |
-| **CSV Import & Export** | Standard CSV format (`name,url,username,password,note`) compatible with major password managers. |
+| **HaveIBeenPwned Breach Check** | Checks newly generated passwords against global breach datasets via k-Anonymity API (sends only 5-char SHA-1 prefix) with zero plaintext leak. |
+| **Encrypted Vault Backup (.gpvault)** | Exports and restores the full encrypted vault (passwords, 2FA, cards, cookies) as a standalone AES-256-GCM + Argon2id container, safe for cloud storage. |
+| **Full RFC 6238 TOTP Engine** | Supports SHA-1, SHA-256, SHA-512, 6 or 8 digits, and custom time steps (15s, 30s, 60s) for enterprise 2FA tokens. |
+| **CSV Import & Export** | Standard CSV format (`name,url,username,password,note`) with built-in Formula Injection (CWE-1236) sanitization. |
 
 ---
 

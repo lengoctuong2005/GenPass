@@ -116,8 +116,11 @@
             <div id="strength-bar" class="strength-bar"></div>
           </div>
           <div class="strength-label">
-            <span>Độ mạnh:</span>
-            <strong id="strength-text">Rất mạnh</strong>
+            <div class="strength-left">
+              <span>Độ mạnh:</span>
+              <strong id="strength-text">Rất mạnh</strong>
+            </div>
+            <span id="breach-status" class="breach-status-badge" hidden></span>
           </div>
         </div>
       </section>
@@ -303,10 +306,13 @@
         <span class="history-title">Lịch sử</span>
         <div class="history-header-actions">
           <input type="file" id="input-import-csv" accept=".csv,text/csv" style="display: none;">
-          <button id="btn-import-csv" class="btn-text" type="button" title="Nhập mật khẩu từ file CSV">Nhập</button>
-          <button id="btn-export-csv" class="btn-text" type="button" title="Xuất CSV tương thích trình quản lý mật khẩu">Xuất</button>
-          <button id="btn-open-tags" class="btn-text" type="button" title="Quản lý danh sách nhãn">Nhãn</button>
-          <button id="btn-clear-history" class="btn-text danger" type="button" title="Xóa toàn bộ lịch sử">Xóa</button>
+          <input type="file" id="input-import-vault" accept=".gpvault,application/json" style="display: none;">
+          <button id="btn-import-csv" class="btn-text" type="button" data-i18n="history.import" title="Nhập mật khẩu từ file CSV">Nhập CSV</button>
+          <button id="btn-export-csv" class="btn-text" type="button" data-i18n="history.export" title="Xuất CSV tương thích trình quản lý mật khẩu">Xuất CSV</button>
+          <button id="btn-backup-vault" class="btn-text" type="button" data-i18n="history.backup" title="Sao lưu kho mã hóa (.gpvault)">Sao lưu</button>
+          <button id="btn-restore-vault" class="btn-text" type="button" data-i18n="history.restore" title="Khôi phục kho từ file .gpvault">Khôi phục</button>
+          <button id="btn-open-tags" class="btn-text" type="button" data-i18n="history.tags" title="Quản lý danh sách nhãn">Nhãn</button>
+          <button id="btn-clear-history" class="btn-text danger" type="button" data-i18n="history.clear" title="Xóa toàn bộ lịch sử">Xóa</button>
         </div>
       </div>
 

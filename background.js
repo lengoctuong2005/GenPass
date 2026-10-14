@@ -207,10 +207,15 @@ function base32Decode(str) {
 }
 
 // Helper: Compute current RFC 6238 TOTP Code
-async function computeTotpCode(secretKey) {
+async function computeTotpCode(secretKey, opts = {}) {
   const keyBytes = base32Decode(secretKey);
   if (keyBytes.length === 0) return "";
-  const counter = Math.floor(Date.now() / 1000 / 30);
+  const period = parseInt(opts.period, 10) || 30;
+  const digits = parseInt(opts.digits, 10) || 6;
+  const rawAlgo = (opts.algorithm || "SHA-1").toUpperCase();
+  const hash = ["SHA-1", "SHA-256", "SHA-512"].includes(rawAlgo) ? rawAlgo : "SHA-1";
+
+  const counter = Math.floor(Date.now() / 1000 / period);
   const buffer = new ArrayBuffer(8);
   const view = new DataView(buffer);
   view.setBigUint64(0, BigInt(counter), false);
@@ -218,7 +223,7 @@ async function computeTotpCode(secretKey) {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
     keyBytes,
-    { name: "HMAC", hash: "SHA-1" },
+    { name: "HMAC", hash },
     false,
     ["sign"]
   );
@@ -230,7 +235,8 @@ async function computeTotpCode(secretKey) {
     ((sigBytes[offset + 1] & 0xff) << 16) |
     ((sigBytes[offset + 2] & 0xff) << 8) |
     (sigBytes[offset + 3] & 0xff);
-  return (binary % 1000000).toString().padStart(6, "0");
+  const mod = Math.pow(10, digits);
+  return (binary % mod).toString().padStart(digits, "0");
 }
 
 // Helper: Parse otpauth:// URL
@@ -249,10 +255,16 @@ function parseOtpAuthUrl(urlStr) {
       account = pathParts[0] || "";
     }
     const secret = url.searchParams.get("secret") || "";
+    const algorithm = (url.searchParams.get("algorithm") || "SHA-1").toUpperCase();
+    const digits = parseInt(url.searchParams.get("digits"), 10) || 6;
+    const period = parseInt(url.searchParams.get("period"), 10) || 30;
     return {
       name: issuer || account || "2FA",
       account: account,
-      secret: secret.trim()
+      secret: secret.trim(),
+      algorithm,
+      digits,
+      period
     };
   } catch {
     return null;
@@ -427,7 +439,7 @@ async function vaultRead(keys, tabUrl = null) {
 }
 
 // Helper: Save 2FA with Deduplication Guard
-async function save2FaCredential(name, account, secret, tabId) {
+async function save2FaCredential(name, account, secret, tabId, opts = {}) {
   const res = await vaultRead(["gen2FA"]);
   if (res.__locked) {
     console.error("GenPass: kho dang khoa, mo popup va nhap PIN de luu ma 2FA");
@@ -446,6 +458,9 @@ async function save2FaCredential(name, account, secret, tabId) {
     name: name || (existingIndex >= 0 ? list[existingIndex].name : "2FA Account"),
     account: account || (existingIndex >= 0 ? list[existingIndex].account : ""),
     secret: cleanSecret,
+    algorithm: opts.algorithm || "SHA-1",
+    digits: opts.digits || 6,
+    period: opts.period || 30,
     createdAt: new Date().toLocaleTimeString("vi-VN")
   };
 
@@ -636,7 +651,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       }
     }
 
-    const otp = await computeTotpCode(targetItem.secret);
+    const otp = await computeTotpCode(targetItem.secret, targetItem);
     if (!otp) {
       chrome.tabs.sendMessage(tab.id, {
         action: "show_toast",
@@ -658,6 +673,7 @@ function processQrResult(qrText, tabId) {
   let name = "2FA Account";
   let account = "";
   let secret = "";
+  let otpOpts = {};
 
   if (trimmed.startsWith("otpauth://")) {
     const parsed = parseOtpAuthUrl(trimmed);
@@ -665,6 +681,11 @@ function processQrResult(qrText, tabId) {
       name = parsed.name;
       account = parsed.account;
       secret = parsed.secret;
+      otpOpts = {
+        algorithm: parsed.algorithm,
+        digits: parsed.digits,
+        period: parsed.period
+      };
     }
   } else {
     const cleanKey = trimmed.replace(/\s+/g, "").toUpperCase();
@@ -681,7 +702,7 @@ function processQrResult(qrText, tabId) {
     return;
   }
 
-  save2FaCredential(name, account, secret, tabId).catch(err => {
+  save2FaCredential(name, account, secret, tabId, otpOpts).catch(err => {
     console.error("Lưu 2FA thất bại:", err);
   });
 }

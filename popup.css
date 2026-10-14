@@ -382,8 +382,36 @@ body {
 .strength-label {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   font-size: 11px;
   color: var(--text-secondary);
+}
+
+.strength-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.breach-status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+}
+
+.breach-status-badge.breached {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.breach-status-badge.safe {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 /* Options */
