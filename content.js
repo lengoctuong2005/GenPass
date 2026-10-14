@@ -16,7 +16,9 @@
 
   function sameDomain(a, b) {
     try {
-      return new URL(a).hostname.replace(/^www\./i, "") === new URL(b).hostname.replace(/^www\./i, "");
+      const uA = new URL(a.includes("://") ? a : "https://" + a);
+      const uB = new URL(b.includes("://") ? b : "https://" + b);
+      return uA.origin.replace(/^http(s)?:\/\/www\./i, "http$1://") === uB.origin.replace(/^http(s)?:\/\/www\./i, "http$1://");
     } catch (e) {
       return false;
     }
@@ -146,7 +148,7 @@
       const matching = history.filter(h => {
         // autofill chỉ điền khi origin khớp: có url thì bắt buộc cùng host, không url thì giữ khớp theo tên
         if (h.url) return sameDomain(h.url, location.href);
-        return !!(h.name && (h.name.toLowerCase() === domain || domain.includes(h.name.toLowerCase())));
+        return !!(h.name && h.name.replace(/^www\./i, "").toLowerCase() === domain);
       });
 
       if (matching.length === 0) return;
@@ -266,7 +268,8 @@
     // Eye toggle
     const eyeBtn = dialog.querySelector("#gp-btn-eye");
     const passDisplay = dialog.querySelector("#gp-pass-display");
-    eyeBtn.addEventListener("click", () => {
+    eyeBtn.addEventListener("click", (e) => {
+      if (!e.isTrusted) return;
       isPasswordMasked = !isPasswordMasked;
       passDisplay.textContent = isPasswordMasked ? maskedPassword : password;
       eyeBtn.title = isPasswordMasked ? "Hiện mật khẩu" : "Ẩn mật khẩu";
@@ -286,7 +289,8 @@
 
     // Save button
     const saveBtn = dialog.querySelector("#gp-btn-yes");
-    saveBtn.addEventListener("click", () => {
+    saveBtn.addEventListener("click", (e) => {
+      if (!e.isTrusted) return;
       gpGet(["genHistory"], (res) => {
         const history = Array.isArray(res.genHistory) ? res.genHistory : [];
 
@@ -304,7 +308,11 @@
         history.unshift(newItem);
         if (history.length > 200) history.pop();
 
-        gpSet({ genHistory: history }, () => {
+        gpSet({ genHistory: history }, (setRes) => {
+          if (setRes && setRes.locked) {
+            showInPageToast("GenPass: Kho đang khóa, hãy mở popup và nhập PIN để lưu mật khẩu!");
+            return;
+          }
           saveBtn.textContent = "Đã lưu!";
           saveBtn.style.backgroundColor = "#10b981";
           setTimeout(() => {
@@ -510,7 +518,8 @@
     });
 
     const saveBtn = dialog.querySelector("#gp-btn-pay-yes");
-    saveBtn.addEventListener("click", () => {
+    saveBtn.addEventListener("click", (e) => {
+      if (!e.isTrusted) return;
       gpGet(["genCards"], (res) => {
         const cards = Array.isArray(res.genCards) ? res.genCards : [];
         const newCard = {
@@ -532,7 +541,11 @@
           createdAt: new Date().toLocaleTimeString("vi-VN") + " " + new Date().toLocaleDateString("vi-VN")
         };
         cards.unshift(newCard);
-        gpSet({ genCards: cards }, () => {
+        gpSet({ genCards: cards }, (setRes) => {
+          if (setRes && setRes.locked) {
+            showInPageToast("GenPass: Kho đang khóa, hãy mở popup và nhập PIN để lưu thẻ!");
+            return;
+          }
           saveBtn.textContent = "Đã lưu!";
           saveBtn.style.backgroundColor = "#10b981";
           setTimeout(() => {
@@ -635,17 +648,16 @@
         : null;
       const finalTarget = (isEditable(target) ? target : null) || (isEditable(activeEl) ? activeEl : null);
 
-      try {
-        navigator.clipboard.writeText(msg.password);
-      } catch (err) {
-        console.warn("Clipboard write failed:", err);
-      }
-
       if (finalTarget) {
         setNativeValue(finalTarget, msg.password);
         showInPageToast(`GenPass: Đã tạo và điền ${msg.label || "mật khẩu"}!`);
         sendResponse({ success: true, filled: true });
       } else {
+        try {
+          navigator.clipboard.writeText(msg.password);
+        } catch (err) {
+          console.warn("Clipboard write failed:", err);
+        }
         showInPageToast(`GenPass: Đã sao chép ${msg.label || "mật khẩu"} vào bộ nhớ tạm!`);
         sendResponse({ success: true, filled: false });
       }
@@ -657,9 +669,8 @@
         const domain = extractDomain().toLowerCase();
         const history = Array.isArray(res.genHistory) ? res.genHistory : [];
         const matching = history.filter(h => {
-          const nameMatch = h.name && (h.name.toLowerCase() === domain || domain.includes(h.name.toLowerCase()));
-          const urlMatch = h.url && h.url.toLowerCase().includes(domain);
-          return nameMatch || urlMatch;
+          if (h.url) return sameDomain(h.url, location.href);
+          return !!(h.name && h.name.replace(/^www\./i, "").toLowerCase() === domain);
         });
 
         if (matching.length === 0) {
@@ -1019,6 +1030,7 @@
     };
 
     node.querySelector(".gps-btn-own").addEventListener("click", () => {
+      if (typeof event !== "undefined" && event && event.isTrusted === false) return;
       setNativeValue(passInput, "");
       if (confirmField && confirmField !== passInput) setNativeValue(confirmField, "");
       passInput.dataset.genpassSuggestDismissed = "1";
@@ -1027,6 +1039,7 @@
     });
 
     node.querySelector(".gps-btn-use").addEventListener("click", () => {
+      if (typeof event !== "undefined" && event && event.isTrusted === false) return;
       gpGet(["genHistory"], (res) => {
         const history = Array.isArray(res.genHistory) ? res.genHistory : [];
         const already = history.some(h => h.password === suggestion && (h.name === domain || (h.url || "").includes(domain)));

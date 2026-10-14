@@ -268,24 +268,29 @@ function isSafeFetchUrl(urlStr) {
   try {
     const u = new URL(s);
     if (u.protocol !== "http:" && u.protocol !== "https:") return false;
-    const host = u.hostname.toLowerCase();
+    let host = u.hostname.toLowerCase();
+    if (host.startsWith("[") && host.endsWith("]")) {
+      host = host.slice(1, -1);
+    }
     if (
       host === "localhost" ||
       host === "0.0.0.0" ||
+      host === "::" ||
       host.endsWith(".local") ||
       host.endsWith(".localhost") ||
       host.endsWith(".internal")
     ) {
       return false;
     }
+    // Chặn IPv6-mapped IPv4 ([::ffff:127.0.0.1], ::ffff:7f00:1)
+    if (host.startsWith("::ffff:") || host.startsWith("ffff:")) return false;
     if (/^127\./.test(host)) return false;
     if (/^10\./.test(host)) return false;
     if (/^192\.168\./.test(host)) return false;
     if (/^169\.254\./.test(host)) return false;
     if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return false;
-    if (host === "::1" || host === "[::1]") return false;
-    if (host.startsWith("fe80:") || host.startsWith("[fe80:")) return false;
-    if (host.startsWith("fc00:") || host.startsWith("[fc00:") || host.startsWith("fd00:") || host.startsWith("[fd00:")) return false;
+    if (host === "::1" || host === "0:0:0:0:0:0:0:1" || host === "0:0:0:0:0:0:0:0") return false;
+    if (host.startsWith("fe80:") || host.startsWith("fc00:") || host.startsWith("fd00:")) return false;
     return true;
   } catch {
     return false;
@@ -296,7 +301,7 @@ function isSafeFetchUrl(urlStr) {
 async function decodeQrFromUrl(url) {
   if (!isSafeFetchUrl(url)) return null;
   try {
-    const response = await fetch(url);
+    const response = await fetch(url, { redirect: "error" });
     const blob = await response.blob();
     const bitmap = await createImageBitmap(blob);
 
@@ -388,14 +393,35 @@ async function vaultMutate(partial) {
 }
 
 // Doc cac khoa can thiet: khoa vault lay tu blob, khoa con lai lay thang storage
-async function vaultRead(keys) {
+async function vaultRead(keys, tabUrl = null) {
   const list = Array.isArray(keys) ? keys : [];
   const ctx = await vaultContext();
   if (ctx.locked) return { __locked: true };
   const out = {};
   list.forEach(k => {
-    if (ctx.vault && ctx.data && Object.prototype.hasOwnProperty.call(ctx.data, k)) out[k] = ctx.data[k];
-    else if (Object.prototype.hasOwnProperty.call(ctx.plain, k)) out[k] = ctx.plain[k];
+    let val;
+    if (ctx.vault && ctx.data && Object.prototype.hasOwnProperty.call(ctx.data, k)) val = ctx.data[k];
+    else if (Object.prototype.hasOwnProperty.call(ctx.plain, k)) val = ctx.plain[k];
+
+    // Neu la content script tren tab web yeu cau genHistory, chi tra ve account khop origin cua tab
+    if (tabUrl && k === "genHistory" && Array.isArray(val)) {
+      try {
+        const domain = new URL(tabUrl).hostname.replace(/^www\./i, "").toLowerCase();
+        val = val.filter(h => {
+          if (h.url) {
+            try { return new URL(h.url).hostname.replace(/^www\./i, "").toLowerCase() === domain; } catch { return false; }
+          }
+          return h.name && h.name.replace(/^www\./i, "").toLowerCase() === domain;
+        });
+      } catch {
+        val = [];
+      }
+    }
+    // Content script khong duoc phep truy xuat genCards hoac genCookieProfiles cua trang khac
+    if (tabUrl && (k === "genCards" || k === "genCookieProfiles")) {
+      val = [];
+    }
+    out[k] = val;
   });
   return out;
 }
@@ -599,7 +625,11 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     if (tab.url) {
       try {
         const domain = new URL(tab.url).hostname.replace(/^www\./i, "").toLowerCase();
-        const match = list.find(item => item.name && (item.name.toLowerCase().includes(domain) || domain.includes(item.name.toLowerCase())));
+        const match = list.find(item => {
+          if (!item.name) return false;
+          const itemName = item.name.replace(/^www\./i, "").toLowerCase();
+          return itemName === domain || domain.endsWith("." + itemName);
+        });
         if (match) targetItem = match;
       } catch (err) {
         console.warn("Domain matching for 2FA failed:", err);
@@ -723,6 +753,8 @@ if (chrome.alarms) {
 let vaultPortCount = 0;
 chrome.runtime.onConnect.addListener((port) => {
   if (!port || port.name !== "vault-session") return;
+  // Chi chap nhan port tu popup / trang extension, chan content script pin port
+  if (port.sender?.url && !port.sender.url.startsWith("chrome-extension://")) return;
   vaultPortCount++;
   port.onDisconnect.addListener(async () => {
     vaultPortCount = Math.max(0, vaultPortCount - 1);
@@ -741,7 +773,14 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg || !msg.action) return;
 
+  const isWebPage = !!(sender?.url && !sender.url.startsWith("chrome-extension://"));
+
   if (msg.action === "vault_lock") {
+    // Chan web content script khoa kho trai phep gay DoS
+    if (isWebPage) {
+      sendResponse({ ok: false, error: "UNAUTHORIZED" });
+      return;
+    }
     chrome.storage.session.remove("genVaultKey");
     sendResponse({ ok: true });
     return;
@@ -755,7 +794,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.action === "vault_get") {
-    vaultRead(msg.keys).then(sendResponse);
+    // Neu la content script tren tab web, chi tra ve data khop origin tab do
+    vaultRead(msg.keys, isWebPage ? sender.url : null).then(sendResponse);
     return true;
   }
 

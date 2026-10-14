@@ -87,7 +87,11 @@ function validateExpiryDate(expiryStr) {
   const mm = parseInt(mmStr, 10);
   const yy = parseInt(yyStr, 10);
   if (mm < 1 || mm > 12) return false;
-  return yy >= 0 && yy <= 99;
+  const now = new Date();
+  const currentYear = now.getFullYear() % 100;
+  const currentMonth = now.getMonth() + 1;
+  if (yy < currentYear || (yy === currentYear && mm < currentMonth)) return false;
+  return true;
 }
 
 function generatePassword(options) {
@@ -427,6 +431,13 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentLang = "vi";
   let vaultFailedAttempts = 0;
   let vaultLockoutUntil = 0;
+
+  if (chrome?.storage?.session) {
+    chrome.storage.session.get(["vaultLockoutUntil", "vaultFailedAttempts"], (res) => {
+      if (res?.vaultLockoutUntil) vaultLockoutUntil = Number(res.vaultLockoutUntil);
+      if (res?.vaultFailedAttempts) vaultFailedAttempts = Number(res.vaultFailedAttempts);
+    });
+  }
 
   const I18N = {
     vi: {
@@ -1394,6 +1405,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const { data, keyB64 } = await GPVault.unlockWithPin(vaultBlob, pin);
       vaultFailedAttempts = 0;
       vaultLockoutUntil = 0;
+      if (chrome?.storage?.session) {
+        chrome.storage.session.remove(["vaultLockoutUntil", "vaultFailedAttempts"]).catch(() => {});
+      }
       vaultFill(data, keyB64); // keyB64 la chuoi base64 cua key tho
       await vaultSessionSet(keyB64, vaultTimeoutMin());
       vaultOn = true;
@@ -1406,6 +1420,9 @@ document.addEventListener("DOMContentLoaded", () => {
       vaultFailedAttempts++;
       if (vaultFailedAttempts >= 5) {
         vaultLockoutUntil = Date.now() + 15000;
+      }
+      if (chrome?.storage?.session) {
+        chrome.storage.session.set({ vaultLockoutUntil, vaultFailedAttempts }).catch(() => {});
       }
       const errMsg = currentLang === "en" ? "Incorrect PIN" : "Mã PIN không đúng";
       vaultShowError(els.vaultLockError, errMsg);
@@ -1588,6 +1605,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Ghi 1 khoa nhay cam: kho dang bat thi ma hoa lai ca blob, nguoc lai ghi thang nhu cu
   async function persist(key, value) {
     if (!vaultOn || !vaultKey || !vaultBlob) {
+      if (vaultOpts.vaultEnabled) {
+        console.warn("Kho dang bat ma chua mo, huy ghi plaintext:", key);
+        return;
+      }
       chrome.storage.local.set({ [key]: value });
       return;
     }
@@ -2206,7 +2227,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function escapeCsvCell(cell) {
     if (cell === null || cell === undefined) return "";
-    const str = String(cell);
+    let str = String(cell);
+    // Phong chong CSV Formula Injection (CWE-1236) khi mo bang Excel / Calc
+    if (/^[=+\-@\t\r]/.test(str)) {
+      str = "'" + str;
+    }
     if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("\r")) {
       return `"${str.replace(/"/g, '""')}"`;
     }
@@ -2343,7 +2368,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return { imported: 0, skipped: 0 };
     }
 
-    const existingPasswords = new Set(currentHistory.map(h => h.password));
+    const existingAccounts = new Set(currentHistory.map(h => `${(h.username || "").toLowerCase()}|${(h.url || h.name || "").toLowerCase()}|${h.password}`));
     let importedCount = 0;
     let skippedCount = 0;
     let tagsChanged = false;
@@ -2353,17 +2378,17 @@ document.addEventListener("DOMContentLoaded", () => {
       const password = (row[colPassword] || "").trim();
       if (!password) continue;
 
-      if (existingPasswords.has(password)) {
-        skippedCount++;
-        continue;
-      }
-
-      existingPasswords.add(password);
-
       let rawName = colName !== -1 ? (row[colName] || "").trim() : "";
       let rawUser = colUser !== -1 ? (row[colUser] || "").trim() : "";
       let rawUrl = colUrl !== -1 ? (row[colUrl] || "").trim() : "";
       let rawNote = colNote !== -1 ? (row[colNote] || "").trim() : "";
+
+      const accKey = `${rawUser.toLowerCase()}|${(rawUrl || rawName).toLowerCase()}|${password}`;
+      if (existingAccounts.has(accKey)) {
+        skippedCount++;
+        continue;
+      }
+      existingAccounts.add(accKey);
 
       let tag = "";
       if (rawNote) {
@@ -2698,6 +2723,24 @@ document.addEventListener("DOMContentLoaded", () => {
   if (els.vaultPin) {
     els.vaultPin.addEventListener("keydown", (e) => {
       if (e.key === "Enter") vaultUnlock();
+    });
+  }
+
+  if (els.vaultPinNew) {
+    els.vaultPinNew.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") els.btnVaultPinSave?.click();
+    });
+  }
+
+  if (els.vaultPinConfirm) {
+    els.vaultPinConfirm.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") els.btnVaultPinSave?.click();
+    });
+  }
+
+  if (els.vaultPinOff) {
+    els.vaultPinOff.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") els.btnVaultOffConfirm?.click();
     });
   }
 
@@ -3660,6 +3703,11 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (!validateLuhn(rawNumber)) {
+        showToast(currentLang === "en" ? "Invalid card number (checksum failed)!" : "Số thẻ không hợp lệ (sai mã kiểm tra Luhn)!");
+        return;
+      }
+
       const exp = (els.inputCardExp.value || "").trim();
       if (exp && !validateExpiryDate(exp)) {
         showToast("Hạn thẻ không hợp lệ (định dạng MM/YY, ví dụ 12/28)!");
@@ -3768,9 +3816,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     if (c.secure !== undefined) clean.secure = !!c.secure;
     if (c.httpOnly !== undefined) clean.httpOnly = !!c.httpOnly;
-    if (c.sameSite && ["no_restriction", "lax", "strict"].includes(c.sameSite)) {
-      clean.sameSite = c.sameSite;
+    const sameSiteLower = (c.sameSite || "").toLowerCase();
+    if (sameSiteLower === "no_restriction" || sameSiteLower === "none") {
+      clean.sameSite = "no_restriction";
+      clean.secure = true;
+    } else if (sameSiteLower === "lax" || sameSiteLower === "strict") {
+      clean.sameSite = sameSiteLower;
     }
+    if (c.partitionKey) clean.partitionKey = c.partitionKey;
     if (c.expirationDate) clean.expirationDate = c.expirationDate;
     return clean;
   }
@@ -4060,7 +4113,7 @@ document.addEventListener("DOMContentLoaded", () => {
               chrome.browsingData.remove(
                 { origins: [origin] },
                 {
-                  localStorage: true, indexedDB: true, cacheStorage: true, cache: true,
+                  localStorage: true, indexedDB: true, cacheStorage: true,
                   serviceWorkers: true, fileSystems: true, webSQL: true,
                   cookies: false, history: false, passwords: false, formData: false, downloads: false
                 },

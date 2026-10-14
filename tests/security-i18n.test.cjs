@@ -26,13 +26,16 @@ assert.strictEqual(isSafeFetchUrl("http://sub.local/"), false, "Must block .loca
 assert.strictEqual(isSafeFetchUrl("http://internal.localhost/"), false, "Must block .localhost domains");
 assert.strictEqual(isSafeFetchUrl("ftp://example.com/file"), false, "Must block non-http/https/data/blob protocols");
 assert.strictEqual(isSafeFetchUrl("javascript:alert(1)"), false, "Must block javascript: uri");
+assert.strictEqual(isSafeFetchUrl("http://[::ffff:127.0.0.1]/qr.png"), false, "Must block IPv6-mapped 127.0.0.1");
+assert.strictEqual(isSafeFetchUrl("http://[::ffff:169.254.169.254]/latest"), false, "Must block IPv6-mapped metadata");
+assert.strictEqual(isSafeFetchUrl("http://[::]/qr.png"), false, "Must block unspecified IPv6 ::");
 
 // Allowed safe URLs
 assert.strictEqual(isSafeFetchUrl("data:image/png;base64,iVBORw0KGgoAAAANSUhEUg=="), true, "Must allow data URI");
 assert.strictEqual(isSafeFetchUrl("blob:chrome-extension://abcdef/123-456"), true, "Must allow blob URI");
 assert.strictEqual(isSafeFetchUrl("https://img.vietqr.io/image/TCB-1005555555555-qr_only.png"), true, "Must allow public https domain");
 assert.strictEqual(isSafeFetchUrl("https://raw.githubusercontent.com/lengoctuong2005/GenPass/main/manifest.json"), true, "Must allow github raw");
-console.log("✓ SSRF filter tests passed (14/14)");
+console.log("✓ SSRF filter tests passed (17/17)");
 
 // 2. Donate Info verification from popup.js
 const popupContent = fs.readFileSync(path.join(__dirname, "../popup.js"), "utf8");
